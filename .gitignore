@@ -105,3 +105,19 @@ dist
 
 # Mac OS
 .DS_Store
+
+# Python & Virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.venv/
+Usersreyguvenv-clustering/
+.ipynb_checkpoints/
+
+# Google OAuth Secrets & Sensitive files
+credentials.json
+token.pickle
+token.json
+

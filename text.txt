@@ -1,0 +1,26 @@
+pip install -r requirements.txt
+pip install -r requirements.txt
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+pip install scikit-learn
+
+rm token.pickle
+rm oauth_state.txt
+
+.\venv\Scripts\uvicorn main:app --reload
+uvicorn main:app --reload
+
+
+Nombre: all-MiniLM-L6-v2 (de la librería sentence-transformers).
+¿Para qué sirve?: Convierte el texto de tus tareas y PDFs en 
+vectores numéricos (embeddings) para poder comparar y calcular 
+qué tan similares son al vocabulario de distintas tecnologías 
+(Python, JavaScript, AWS, etc.), 
+sin necesidad de buscar palabras exactas.
+
+roberta-base-openai-detector
+(de la librería transformers de Hugging Face / OpenAI).
+¿Para qué sirve?: Analiza fragmentos del contenido extraído 
+de tus PDFs para calcular la probabilidad de que el texto haya 
+sido redactado por una IA (como ChatGPT) o por un humano.
