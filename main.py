@@ -10,7 +10,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import RedirectResponse, HTMLResponse
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.http import MediaIoBaseDownload
-
+from knowledge_base import UNIFICAR
 from auth import SCOPES, get_credentials
 from classroom_client import (
     get_courses, get_my_submissions,
@@ -270,35 +270,41 @@ def perfil_completo(max_pdfs: int = 50):
             except Exception as e:
                 print(f"    ⚠️ Error: {e}")
 
-        # ── 4. Calcular habilidades
+        # ── 4. Calcular habilidades ──────────────────────────────────────
         print("📊 Calculando habilidades...")
-        habilidades = []
 
+        # Fusionar duplicados entre ambas fuentes
+        tech_pool_unificado = defaultdict(lambda: {"scores": [], "cals": [], "materias": set()})
         for tech, data in tech_pool.items():
+            tech_final = UNIFICAR.get(tech, tech)
+            tech_pool_unificado[tech_final]["scores"].extend(data["scores"])
+            tech_pool_unificado[tech_final]["cals"].extend(data["cals"])
+            tech_pool_unificado[tech_final]["materias"].update(data["materias"])
+
+        habilidades = []
+        for tech, data in tech_pool_unificado.items():
             scores   = data["scores"]
             cals     = data["cals"]
             materias = list(data["materias"])
 
-            sim_prom = sum(scores) / len(scores) if scores else 0
-            cal_prom = sum(cals)   / len(cals)   if cals   else 0
+            sim_prom   = sum(scores) / len(scores) if scores else 0
+            cal_prom   = sum(cals)   / len(cals)   if cals   else 0
             porcentaje = round(min(100, (sim_prom * 60) + (cal_prom * 0.4)), 1)
 
-            if porcentaje >= 70 or cal_prom >= 85:
-                nivel = "Experto"
-            elif porcentaje >= 45 or cal_prom >= 70:
-                nivel = "Avanzado"
-            elif porcentaje >= 20 or cal_prom >= 50:
-                nivel = "Intermedio"
-            elif porcentaje > 0 or cal_prom > 0:
-                nivel = "Básico"
-            else:
+            # Descartar sin evidencia real
+            if porcentaje < 20 and cal_prom < 50:
                 continue
 
+            if porcentaje >= 70 or cal_prom >= 85:   nivel = "Experto"
+            elif porcentaje >= 45 or cal_prom >= 70: nivel = "Avanzado"
+            elif porcentaje >= 20 or cal_prom >= 50: nivel = "Intermedio"
+            else:                                     nivel = "Básico"
+
             habilidades.append({
-                "tecnologia": tech,
+                "habilidad": tech,
                 "nivel":      nivel,
                 "porcentaje": porcentaje,
-                "materias":   materias[:3],
+                "materias":   [m for m in materias[:3] if m],
             })
 
         habilidades.sort(key=lambda x: -x["porcentaje"])
@@ -307,10 +313,10 @@ def perfil_completo(max_pdfs: int = 50):
         for m in materias_detalle:
             m["tecnologias"] = sorted(list(tecnologias_por_curso[m["nombre"]]))
 
-        # Solo mostrar materias con tecnologías detectadas O buen promedio
+        # Solo mostrar materias con tecnologías detectadas
         materias_relevantes = [
             m for m in materias_detalle
-            if len(m["tecnologias"]) > 0 or m["promedio"] >= 50
+            if len(m["tecnologias"]) > 0
         ]
 
         print(f"✅ {len(habilidades)} habilidades | {len(materias_relevantes)} materias relevantes")
