@@ -1,0 +1,101 @@
+pip install -r requirements.txt
+pip install -r requirements.txt
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+pip install scikit-learn
+
+rm token.pickle
+rm oauth_state.txt
+
+.\venv\Scripts\uvicorn main:app --reload
+uvicorn main:app --reload
+
+
+.\venv\Scripts\pip.exe install -r requirements.txt
+.\venv\Scripts\uvicorn.exe main:app --reload
+
+
+
+Nombre: all-MiniLM-L6-v2 (de la librería sentence-transformers).
+¿Para qué sirve?: Convierte el texto de tus tareas y PDFs en 
+vectores numéricos (embeddings) para poder comparar y calcular 
+qué tan similares son al vocabulario de distintas tecnologías 
+(Python, JavaScript, AWS, etc.), 
+sin necesidad de buscar palabras exactas.
+
+roberta-base-openai-detector
+(de la librería transformers de Hugging Face / OpenAI).
+¿Para qué sirve?: Analiza fragmentos del contenido extraído 
+de tus PDFs para calcular la probabilidad de que el texto haya 
+sido redactado por una IA (como ChatGPT) o por un humano.
+
+
+
+
+
+2. Minería de Datos y Machine Learning (Scikit-Learn)
+K-Means Clustering (sklearn.cluster.KMeans): 
+Algoritmo de aprendizaje no supervisado utilizado para 
+agrupar a los estudiantes automáticamente en 4 niveles 
+(Experto, Avanzado, Intermedio, Básico) según el patrón de sus calificaciones.
+
+
+StandardScaler (sklearn.preprocessing.StandardScaler): 
+Para la preparación y estandarización de datos ($Z$-score) antes 
+del clustering, garantizando que las materias tengan el mismo peso 
+estadístico sin importar sus escalas.
+PCA (sklearn.decomposition.PCA): Análisis de Componentes 
+Principales para la reducción de dimensionalidad. Convierte las 
+múltiples variables (materias) en 2 componentes principales ($X, Y$) 
+para poder visualizar gráficamente los clusters en un plano bidimensional.
+
+
+3. Procesamiento de Lenguaje Natural (NLP) e Inteligencia Artificial
+Hugging Face Transformers / Sentence-Transformers / PyTorch: 
+Utilizados para analizar tareas entregadas por los alumnos mediante 
+embeddings de texto, procesamiento de lenguaje natural y detección de 
+uso de Inteligencia Artificial en documentos.
+PyMuPDF (fitz): Biblioteca para la lectura, parsing y extracción 
+eficiente de texto desde archivos PDF de tareas entregadas por los alumnos.
+
+
+4. Manipulación y Análisis de Datos
+Pandas & NumPy: Para la estructuración, limpieza, manejo de valores 
+faltantes (fillna) y agregaciones estadísticas (promedios, matrices de datos).
+
+
+5. Integración con Servicios Externos
+Google Classroom API (google-api-python-client, google-auth): Para 
+autenticarte de forma segura vía OAuth 2.0 y extraer automáticamente los 
+datos de cursos, entregas y calificaciones de los alumnos directamente 
+desde la plataforma institucional.
+
+
+
+1. ¿Qué modelo se utilizó?
+Se utilizó el algoritmo K-Means (KMeans de la librería scikit-learn), 
+que es uno de los algoritmos más populares y fundamentales de 
+clustering no supervisado.
+
+
+¿Por qué es No Supervisado?
+No hay etiquetas previas: El algoritmo no recibe datos de entrenamiento 
+etiquetados (es decir, al algoritmo no se le enseña de antemano 
+qué estudiantes son "Expertos" o "Básicos").
+
+K-MEANS
+Se inicializa de forma aleatoria: El algoritmo selecciona puntos de partida 
+(centroides) al azar dentro del espacio de datos.
+Pesa por distancia: Asigna cada punto de dato al centroide más 
+cercano (generalmente usando distancia euclidiana).
+Re-calcula el centro: Una vez asignados los puntos, se recalcula la 
+posición del centroide como el promedio de todos los puntos 
+asignados a ese grupo.
+Itera: Repite los pasos 2 y 3 hasta que los centroides dejen de moverse 
+o se alcance un número máximo de iteraciones.
+Resultado: Los datos quedan particionados en $K$ grupos (clusters), 
+donde cada grupo tiene una "cohesión" interna (puntos similares) 
+y una "separación" externa (distante de otros grupos).
+
+QUE ES FUNCION DEL CODO

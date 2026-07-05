@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
+scikit-learn
+pandas
+numpy
+python-dotenv
+PyMuPDF
+transformers
+torch
+sentence-transformers
+sqlalchemy
+psycopg2-binary
+pyjwt

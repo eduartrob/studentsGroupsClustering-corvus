@@ -1,0 +1,106 @@
+{
+  "🏆 Experto": {
+    "total": 12,
+    "promedio_general": 89.48,
+    "alumnos": [
+      "Alumno_01",
+      "Alumno_02",
+      "Alumno_03",
+      "Alumno_04",
+      "Alumno_05",
+      "Alumno_06",
+      "Alumno_07",
+      "Alumno_08",
+      "Alumno_09",
+      "Alumno_10",
+      "Alumno_11",
+      "Alumno_12"
+    ],
+    "fortalezas": [
+      "Redes",
+      "Inglés",
+      "Estadística"
+    ]
+  },
+  "🥈 Avanzado": {
+    "total": 18,
+    "promedio_general": 79.27,
+    "alumnos": [
+      "Alumno_13",
+      "Alumno_14",
+      "Alumno_15",
+      "Alumno_16",
+      "Alumno_17",
+      "Alumno_18",
+      "Alumno_19",
+      "Alumno_20",
+      "Alumno_21",
+      "Alumno_22",
+      "Alumno_23",
+      "Alumno_24",
+      "Alumno_25",
+      "Alumno_26",
+      "Alumno_27",
+      "Alumno_28",
+      "Alumno_29",
+      "Alumno_30"
+    ],
+    "fortalezas": [
+      "Programación",
+      "Matemáticas",
+      "IA/ML"
+    ]
+  },
+  "📘 Intermedio": {
+    "total": 18,
+    "promedio_general": 68.41,
+    "alumnos": [
+      "Alumno_31",
+      "Alumno_32",
+      "Alumno_33",
+      "Alumno_34",
+      "Alumno_35",
+      "Alumno_36",
+      "Alumno_37",
+      "Alumno_38",
+      "Alumno_39",
+      "Alumno_40",
+      "Alumno_41",
+      "Alumno_42",
+      "Alumno_43",
+      "Alumno_44",
+      "Alumno_45",
+      "Alumno_46",
+      "Alumno_47",
+      "Alumno_48"
+    ],
+    "fortalezas": [
+      "Matemáticas",
+      "IA/ML",
+      "Programación"
+    ]
+  },
+  "📗 Básico": {
+    "total": 12,
+    "promedio_general": 50.16,
+    "alumnos": [
+      "Alumno_49",
+      "Alumno_50",
+      "Alumno_51",
+      "Alumno_52",
+      "Alumno_53",
+      "Alumno_54",
+      "Alumno_55",
+      "Alumno_56",
+      "Alumno_57",
+      "Alumno_58",
+      "Alumno_59",
+      "Alumno_60"
+    ],
+    "fortalezas": [
+      "Base de Datos",
+      "Redes",
+      "Matemáticas"
+    ]
+  }
+}
