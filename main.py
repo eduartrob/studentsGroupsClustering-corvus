@@ -5,6 +5,7 @@ import io
 import re
 import pickle
 import time
+import json
 from collections import defaultdict
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import RedirectResponse, HTMLResponse
@@ -20,8 +21,10 @@ from clustering import cluster_students
 from tech_extractor import analizar_documento_completo, detectar_tecnologias
 from nlp_processor import analizar_perfil_alumno, detectar_tecnologias_por_taxonomia
 from templates import get_auth_success_html
+from src.routers.teams import router as teams_router
 
 app = FastAPI(title="Student Clustering API")
+app.include_router(teams_router)
 _cache: dict = {}
 
 REDIRECT_URI = "http://localhost:8000/callback"
@@ -150,8 +153,27 @@ def cluster_summary(course_id: str):
         summary.setdefault(r["level"], []).append(r["name"])
     return {"summary": summary}
 
+PDF_CACHE_FILE = "pdf_analysis_cache.json"
+
+def load_pdf_cache() -> dict:
+    if os.path.exists(PDF_CACHE_FILE):
+        try:
+            with open(PDF_CACHE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            pass
+    return {}
+
+def save_pdf_cache(cache: dict):
+    try:
+        with open(PDF_CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=False, indent=2)
+    except:
+        pass
+
 @app.get("/mi-perfil/completo")
-def perfil_completo(max_pdfs: int = 50):
+def perfil_completo():
+    max_pdfs = 15  # Límite interno de PDFs a analizar
     start_time = time.time()
     require_auth()
     try:
@@ -180,7 +202,7 @@ def perfil_completo(max_pdfs: int = 50):
         for curso in cursos:
             tareas_curso = {}
             try:
-                subs = get_my_submissions(curso["id"])
+                subs = get_my_submissions(curso["id"], curso.get("courseState"))
                 for titulo, calificacion in subs.items():
                     todas_las_tareas.append({
                         "curso":        curso["name"],
@@ -226,49 +248,66 @@ def perfil_completo(max_pdfs: int = 50):
         total = len(pdfs_a_analizar)
         print(f"🔍 Analizando {total} de {len(todos_pdfs)} PDFs...")
 
+        pdf_cache = load_pdf_cache()
+        cache_updated = False
+
         for i, pdf in enumerate(pdfs_a_analizar):
             nombre  = pdf.get("name", "")
             carpeta = pdf.get("carpeta", "")
-            print(f"  [{i+1}/{total}] {nombre[:50]}")
+            file_id = pdf.get("id", "")
 
-            try:
-                req  = drive.files().get_media(fileId=pdf["id"])
-                buf  = io.BytesIO()
-                dl   = MediaIoBaseDownload(buf, req)
-                done = False
-                while not done:
-                    _, done = dl.next_chunk()
-
-                analisis  = analizar_documento_completo(buf.getvalue(), nombre)
+            if file_id in pdf_cache:
+                print(f"  [{i+1}/{total}] (Caché) {nombre[:50]}")
+                analisis = pdf_cache[file_id]
                 es_ia     = analisis.get("analisis_ia", {}).get("es_ia", False)
                 prob_ia   = analisis.get("analisis_ia", {}).get("probabilidad_ia")
                 techs_doc = analisis.get("tecnologias_detectadas", [])
+            else:
+                print(f"  [{i+1}/{total}] (IA local) {nombre[:50]}")
+                try:
+                    req  = drive.files().get_media(fileId=file_id)
+                    buf  = io.BytesIO()
+                    dl   = MediaIoBaseDownload(buf, req)
+                    done = False
+                    while not done:
+                        _, done = dl.next_chunk()
 
-                print(f"    IA: {es_ia} ({prob_ia}) | Techs: {[t['tecnologia'] for t in techs_doc]}")
+                    analisis  = analizar_documento_completo(buf.getvalue(), nombre)
+                    pdf_cache[file_id] = analisis
+                    cache_updated = True
 
-                documentos.append({
-                    "nombre":          nombre,
-                    "carpeta":         carpeta,
-                    "hecho_con_ia":    bool(es_ia) if es_ia is not None else None,
-                    "probabilidad_ia": prob_ia,
-                    "tecnologias":     [t["tecnologia"] for t in techs_doc],
-                })
+                    es_ia     = analisis.get("analisis_ia", {}).get("es_ia", False)
+                    prob_ia   = analisis.get("analisis_ia", {}).get("probabilidad_ia")
+                    techs_doc = analisis.get("tecnologias_detectadas", [])
+                except Exception as e:
+                    print(f"    ⚠️ Error: {e}")
+                    continue
 
-                if es_ia:
-                    docs_con_ia.append(nombre)
-                else:
+            print(f"    IA: {es_ia} ({prob_ia}) | Techs: {[t['tecnologia'] for t in techs_doc]}")
+
+            documentos.append({
+                "nombre":          nombre,
+                "carpeta":         carpeta,
+                "hecho_con_ia":    bool(es_ia) if es_ia is not None else None,
+                "probabilidad_ia": prob_ia,
+                "tecnologias":     [t["tecnologia"] for t in techs_doc],
+            })
+
+            if es_ia:
+                docs_con_ia.append(nombre)
+            else:
+                for t in techs_doc:
+                    score_val = t.get("score", t.get("similitud", 0))
+                    tech_pool[t["tecnologia"]]["scores"].append(score_val)
+                    tech_pool[t["tecnologia"]]["materias"].add(carpeta)
+
+                curso_asociado = buscar_curso_de_carpeta(carpeta)
+                if curso_asociado:
                     for t in techs_doc:
-                        score_val = t.get("score", t.get("similitud", 0))
-                        tech_pool[t["tecnologia"]]["scores"].append(score_val)
-                        tech_pool[t["tecnologia"]]["materias"].add(carpeta)
+                        tecnologias_por_curso[curso_asociado].add(t["tecnologia"])
 
-                    curso_asociado = buscar_curso_de_carpeta(carpeta)
-                    if curso_asociado:
-                        for t in techs_doc:
-                            tecnologias_por_curso[curso_asociado].add(t["tecnologia"])
-
-            except Exception as e:
-                print(f"    ⚠️ Error: {e}")
+        if cache_updated:
+            save_pdf_cache(pdf_cache)
 
         # ── 4. Calcular habilidades ──────────────────────────────────────
         print("📊 Calculando habilidades...")

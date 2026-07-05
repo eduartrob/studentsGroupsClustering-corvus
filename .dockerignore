@@ -1,0 +1,25 @@
+# Virtual environments
+venv/
+Usersreyguvenv-clustering/
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Git and IDE files
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# OAuth and credentials state
+oauth_*.txt
+token.pickle
+credentials.json

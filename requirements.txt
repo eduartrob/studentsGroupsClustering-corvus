@@ -11,3 +11,6 @@ PyMuPDF
 transformers
 torch
 sentence-transformers
+sqlalchemy
+psycopg2-binary
+pyjwt

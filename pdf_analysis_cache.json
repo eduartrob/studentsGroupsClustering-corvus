@@ -1,0 +1,802 @@
+{
+  "1drqElAivwmxHr0ykdonrQtmQOMWRWVxu": {
+    "titulo": "233352_Diagnóstico y análisis predictivo sobre un conjunto de datos de mediciones.pdf",
+    "tiene_texto": true,
+    "palabras": 4420,
+    "tecnologias_detectadas": [
+      {
+        "tecnologia": "Análisis de Datos",
+        "score": 0.919
+      },
+      {
+        "tecnologia": "Python",
+        "score": 0.809
+      },
+      {
+        "tecnologia": "Multimedia / Animación",
+        "score": 0.626
+      },
+      {
+        "tecnologia": "Desarrollo Móvil",
+        "score": 0.308
+      },
+      {
+        "tecnologia": "Flutter / Dart",
+        "score": 0.26
+      }
+    ],
+    "analisis_ia": {
+      "es_ia": false,
+      "probabilidad_ia": 0.0,
+      "etiqueta": "✍️ Escrito por humano"
+    }
+  },
+  "1uwP2f11reqZqZPyxOyUajNwAXJLAmIlh": {
+    "titulo": "GUZMAN_CASTRO_233352.AC03.pdf",
+    "tiene_texto": false,
+    "palabras": 0,
+    "tecnologias_detectadas": [
+      {
+        "tecnologia": "Comportamiento Organizacional",
+        "score": 0.838
+      },
+      {
+        "tecnologia": "Ingeniería Civil",
+        "score": 0.727
+      },
+      {
+        "tecnologia": "Redes / Cisco",
+        "score": 0.717
+      },
+      {
+        "tecnologia": "Arquitectura de Computadoras",
+        "score": 0.71
+      },
+      {
+        "tecnologia": "Cálculo",
+        "score": 0.703
+      }
+    ],
+    "analisis_ia": {
+      "es_ia": null,
+      "probabilidad_ia": null,
+      "etiqueta": "⚠️ PDF escaneado sin texto"
+    }
+  },
+  "10drgfL1Qubf70t6aCA3s1sM_Wlvz1cTN": {
+    "titulo": "GuzmanCastro-CalderonMartinez-PalomequeRobledo_233352-233291-221214.AC04.pdf",
+    "tiene_texto": false,
+    "palabras": 0,
+    "tecnologias_detectadas": [
+      {
+        "tecnologia": "Liderazgo / Gestión",
+        "score": 0.869
+      },
+      {
+        "tecnologia": "Comportamiento Organizacional",
+        "score": 0.811
+      },
+      {
+        "tecnologia": "Educación / Pedagogía",
+        "score": 0.652
+      },
+      {
+        "tecnologia": "Diseño UI/UX",
+        "score": 0.629
+      },
+      {
+        "tecnologia": "Derecho",
+        "score": 0.603
+      }
+    ],
+    "analisis_ia": {
+      "es_ia": null,
+      "probabilidad_ia": null,
+      "etiqueta": "⚠️ PDF escaneado sin texto"
+    }
+  },
+  "1p0pgtc1pjiD1Z2V-38g-TKrBlBEh-zDi": {
+    "titulo": "GuzmanCastro-CalderonMartinez-PalomequeRobledo_233352-233291-221214.AC04.pdf",
+    "tiene_texto": false,
+    "palabras": 5,
+    "tecnologias_detectadas": [
+      {
+        "tecnologia": "Liderazgo / Gestión",
+        "score": 0.869
+      },
+      {
+        "tecnologia": "Comportamiento Organizacional",
+        "score": 0.811
+      },
+      {
+        "tecnologia": "Educación / Pedagogía",
+        "score": 0.652
+      },
+      {
+        "tecnologia": "Diseño UI/UX",
+        "score": 0.629
+      },
+      {
+        "tecnologia": "Derecho",
+        "score": 0.603
+      }
+    ],
+    "analisis_ia": {
+      "es_ia": null,
+      "probabilidad_ia": null,
+      "etiqueta": "⚠️ PDF escaneado sin texto"
+    }
+  },
+  "1-OUU1xBUPd-qytZh9vRxlvfyfKQYigRq": {
+    "titulo": "233352-AC01 - Investigación para asentar las bases de conocimiento.pdf",
+    "tiene_texto": false,
+    "palabras": 0,
+    "tecnologias_detectadas": [
+      {
+        "tecnologia": "Machine Learning / IA",
+        "score": 0.771
+      },
+      {
+        "tecnologia": "Derecho",
+        "score": 0.744
+      },
+      {
+        "tecnologia": "Inteligencia de Negocios",
+        "score": 0.677
+      },
+      {
+        "tecnologia": "Laboratorio Clínico",
+        "score": 0.62
+      },
+      {
+        "tecnologia": "Ingeniería Eléctrica",
+        "score": 0.544
+      }
+    ],
+    "analisis_ia": {
+      "es_ia": null,
+      "probabilidad_ia": null,
+      "etiqueta": "⚠️ PDF escaneado sin texto"
+    }
+  },
+  "1YxFi93cjD-trkR9bSRsHVya4F_Z7NBh3": {
+    "titulo": "233291_SujeyCalderonMartinez_Tabla_de_Trazabilidad_de_Requerimientos.pdf",
+    "tiene_texto": true,
+    "palabras": 649,
+    "tecnologias_detectadas": [
+      {
+        "tecnologia": "Comportamiento Organizacional",
+        "score": 0.697
+      },
+      {
+        "tecnologia": "Ingeniería de Software",
+        "score": 0.396
+      },
+      {
+        "tecnologia": "Arquitectura de Computadoras",
+        "score": 0.283
+      },
+      {
+        "tecnologia": "Administración de Proyectos",
+        "score": 0.256
+      }
+    ],
+    "analisis_ia": {
+      "es_ia": false,
+      "probabilidad_ia": 0.0,
+      "etiqueta": "✍️ Escrito por humano"
+    }
+  },
+  "1TpoidP7BxrBAGPqUYUqKDOWPOgAo__GD": {
+    "titulo": "C2.A5.233352.DavisReynoldGuzmanCastro.pdf",
+    "tiene_texto": true,
+    "palabras": 3550,
+    "tecnologias_detectadas": [
+      {
+        "tecnologia": "Cálculo",
+        "score": 0.925
+      },
+      {
+        "tecnologia": "Ciencias Políticas",
+        "score": 0.895
+      },
+      {
+        "tecnologia": "Ingeniería de Software",
+        "score": 0.891
+      },
+      {
+        "tecnologia": "Ética / Filosofía",
+        "score": 0.835
+      },
+      {
+        "tecnologia": "Desarrollo Móvil",
+        "score": 0.808
+      }
+    ],
+    "analisis_ia": {
+      "es_ia": false,
+      "probabilidad_ia": 0.0,
+      "etiqueta": "✍️ Escrito por humano"
+    }
+  },
+  "1LsuV-I_nzZBm3Ul53dTFaNdQXNwwrZGv": {
+    "titulo": "233352David-Guzman.pdf",
+    "tiene_texto": true,
+    "palabras": 2763,
+    "tecnologias_detectadas": [
+      {
+        "tecnologia": "Ingeniería de Software",
+        "score": 0.78
+      },
+      {
+        "tecnologia": "Emprendimiento",
+        "score": 0.337
+      },
+      {
+        "tecnologia": "Arquitectura de Computadoras",
+        "score": 0.284
+      }
+    ],
+    "analisis_ia": {
+      "es_ia": false,
+      "probabilidad_ia": 0.0,
+      "etiqueta": "✍️ Escrito por humano"
+    }
+  },
+  "1slOf13Jih3NtOD5Amm5tiiC8fCm3j60W": {
+    "titulo": "GUZMAN_CASTRO_233352_E03.pdf",
+    "tiene_texto": true,
+    "palabras": 39,
+    "tecnologias_detectadas": [
+      {
+        "tecnologia": "Ingeniería de Software",
+        "score": 0.892
+      },
+      {
+        "tecnologia": "Ciencias Políticas",
+        "score": 0.868
+      },
+      {
+        "tecnologia": "Comportamiento Organizacional",
+        "score": 0.678
+      },
+      {
+        "tecnologia": "Calidad de Software",
+        "score": 0.582
+      },
+      {
+        "tecnologia": "Multimedia / Animación",
+        "score": 0.367
+      }
+    ],
+    "analisis_ia": {
+      "es_ia": false,
+      "probabilidad_ia": 0.0,
+      "etiqueta": "✍️ Escrito por humano"
+    }
+  },
+  "1HlF2BIwbGKLoJWHFf15qWxrAmUTCE3GF": {
+    "titulo": "C2_ACM_233291 221214 233352.pdf",
+    "tiene_texto": true,
+    "palabras": 1248,
+    "tecnologias_detectadas": [
+      {
+        "tecnologia": "Calidad de Software",
+        "score": 0.965
+      },
+      {
+        "tecnologia": "JavaScript / Web",
+        "score": 0.962
+      },
+      {
+        "tecnologia": "Sistemas Operativos",
+        "score": 0.956
+      },
+      {
+        "tecnologia": "Odontología",
+        "score": 0.955
+      },
+      {
+        "tecnologia": "Administración de Proyectos",
+        "score": 0.95
+      }
+    ],
+    "analisis_ia": {
+      "es_ia": false,
+      "probabilidad_ia": 0.0,
+      "etiqueta": "✍️ Escrito por humano"
+    }
+  },
+  "1WpYAWxaEsu1Yt3ZDrnpGZusbvyxuV3ql": {
+    "titulo": "C2_AC2_233291_221214_233352.docx.pdf",
+    "tiene_texto": true,
+    "palabras": 1111,
+    "tecnologias_detectadas": [
+      {
+        "tecnologia": "Ingeniería de Software",
+        "score": 0.974
+      },
+      {
+        "tecnologia": "Administración de Proyectos",
+        "score": 0.801
+      },
+      {
+        "tecnologia": "Calidad de Software",
+        "score": 0.799
+      },
+      {
+        "tecnologia": "Sistemas Operativos",
+        "score": 0.78
+      },
+      {
+        "tecnologia": "Desarrollo Web",
+        "score": 0.775
+      }
+    ],
+    "analisis_ia": {
+      "es_ia": false,
+      "probabilidad_ia": 0.0,
+      "etiqueta": "✍️ Escrito por humano"
+    }
+  },
+  "1YbjBeglJw5i3JyDgwxbaSEXPduH8ubUt": {
+    "titulo": "233291-SUJEYCALDERONMARTINEZ.pdf",
+    "tiene_texto": true,
+    "palabras": 2505,
+    "tecnologias_detectadas": [
+      {
+        "tecnologia": "Machine Learning / IA",
+        "score": 0.83
+      },
+      {
+        "tecnologia": "Ingeniería Eléctrica",
+        "score": 0.579
+      },
+      {
+        "tecnologia": "Estructuras de Datos",
+        "score": 0.366
+      },
+      {
+        "tecnologia": "Comportamiento Organizacional",
+        "score": 0.325
+      },
+      {
+        "tecnologia": "Multimedia / Animación",
+        "score": 0.319
+      }
+    ],
+    "analisis_ia": {
+      "es_ia": false,
+      "probabilidad_ia": 0.0,
+      "etiqueta": "✍️ Escrito por humano"
+    }
+  },
+  "1W1pLfqC8Qla2C4OxG-R2E9vQiorm8j4I": {
+    "titulo": "Sujey_Ingles.pdf",
+    "tiene_texto": false,
+    "palabras": 0,
+    "tecnologias_detectadas": [
+      {
+        "tecnologia": "Lingüística / Traducción",
+        "score": 0.923
+      },
+      {
+        "tecnologia": "Inglés",
+        "score": 0.898
+      },
+      {
+        "tecnologia": "Machine Learning / IA",
+        "score": 0.693
+      },
+      {
+        "tecnologia": "Diseño Gráfico",
+        "score": 0.68
+      },
+      {
+        "tecnologia": "Educación / Pedagogía",
+        "score": 0.625
+      }
+    ],
+    "analisis_ia": {
+      "es_ia": null,
+      "probabilidad_ia": null,
+      "etiqueta": "⚠️ PDF escaneado sin texto"
+    }
+  },
+  "11pKkA-Ajlipv6RAGYWsjeFitBbacPPP8": {
+    "titulo": "Documentacion de proyecto_233291_221214_233352.pdf",
+    "tiene_texto": true,
+    "palabras": 1995,
+    "tecnologias_detectadas": [
+      {
+        "tecnologia": "Comportamiento Organizacional",
+        "score": 0.37
+      }
+    ],
+    "analisis_ia": {
+      "es_ia": false,
+      "probabilidad_ia": 0.0,
+      "etiqueta": "✍️ Escrito por humano"
+    }
+  },
+  "1COVUCviyDMtAWVPmfyEeAKcf8Ge3T6TG": {
+    "titulo": "CalderonMartinez_233291.AC03.pdf",
+    "tiene_texto": false,
+    "palabras": 0,
+    "tecnologias_detectadas": [
+      {
+        "tecnologia": "Liderazgo / Gestión",
+        "score": 0.633
+      },
+      {
+        "tecnologia": "Comportamiento Organizacional",
+        "score": 0.55
+      },
+      {
+        "tecnologia": "Cálculo",
+        "score": 0.534
+      },
+      {
+        "tecnologia": "Diseño UI/UX",
+        "score": 0.487
+      },
+      {
+        "tecnologia": "Educación / Pedagogía",
+        "score": 0.463
+      }
+    ],
+    "analisis_ia": {
+      "es_ia": null,
+      "probabilidad_ia": null,
+      "etiqueta": "⚠️ PDF escaneado sin texto"
+    }
+  },
+  "18vLtW_B9R9Q2NaJKovS-gEUUPgd3MWud": {
+    "titulo": "C2_EC_233291.pdf",
+    "tiene_texto": false,
+    "palabras": 0,
+    "tecnologias_detectadas": [
+      {
+        "tecnologia": "Cálculo",
+        "score": 0.934
+      },
+      {
+        "tecnologia": "Arquitectura de Computadoras",
+        "score": 0.878
+      },
+      {
+        "tecnologia": "Ética / Filosofía",
+        "score": 0.831
+      },
+      {
+        "tecnologia": "Inglés",
+        "score": 0.825
+      },
+      {
+        "tecnologia": "Sistemas Embebidos",
+        "score": 0.81
+      }
+    ],
+    "analisis_ia": {
+      "es_ia": null,
+      "probabilidad_ia": null,
+      "etiqueta": "⚠️ PDF escaneado sin texto"
+    }
+  },
+  "1ZqsV6YP9amEYR8MpKvsi-yTP9VyU8Q7D": {
+    "titulo": "C2_EC_233291.pdf",
+    "tiene_texto": false,
+    "palabras": 0,
+    "tecnologias_detectadas": [
+      {
+        "tecnologia": "Cálculo",
+        "score": 0.934
+      },
+      {
+        "tecnologia": "Arquitectura de Computadoras",
+        "score": 0.878
+      },
+      {
+        "tecnologia": "Ética / Filosofía",
+        "score": 0.831
+      },
+      {
+        "tecnologia": "Inglés",
+        "score": 0.825
+      },
+      {
+        "tecnologia": "Sistemas Embebidos",
+        "score": 0.81
+      }
+    ],
+    "analisis_ia": {
+      "es_ia": null,
+      "probabilidad_ia": null,
+      "etiqueta": "⚠️ PDF escaneado sin texto"
+    }
+  },
+  "1p1WqaRvUaafhGFuqYQahoqxLLUs2vg0Q": {
+    "titulo": "tarea.pdf",
+    "tiene_texto": false,
+    "palabras": 0,
+    "tecnologias_detectadas": [
+      {
+        "tecnologia": "Inglés",
+        "score": 0.703
+      },
+      {
+        "tecnologia": "Comportamiento Organizacional",
+        "score": 0.653
+      },
+      {
+        "tecnologia": "Educación / Pedagogía",
+        "score": 0.62
+      },
+      {
+        "tecnologia": "Desarrollo Web",
+        "score": 0.614
+      },
+      {
+        "tecnologia": "Diseño UI/UX",
+        "score": 0.603
+      }
+    ],
+    "analisis_ia": {
+      "es_ia": null,
+      "probabilidad_ia": null,
+      "etiqueta": "⚠️ PDF escaneado sin texto"
+    }
+  },
+  "1DyAidi-Xh_MLzTtC5fECV2rs79aqQXoT": {
+    "titulo": "233291_233352_221214_Implementacion de microservicio de ML no supervisado.pdf",
+    "tiene_texto": true,
+    "palabras": 7344,
+    "tecnologias_detectadas": [
+      {
+        "tecnologia": "Ingeniería de Software",
+        "score": 0.643
+      },
+      {
+        "tecnologia": "Estructuras de Datos",
+        "score": 0.584
+      },
+      {
+        "tecnologia": "Docker / DevOps",
+        "score": 0.444
+      },
+      {
+        "tecnologia": "Comportamiento Organizacional",
+        "score": 0.424
+      },
+      {
+        "tecnologia": "Educación / Pedagogía",
+        "score": 0.269
+      }
+    ],
+    "analisis_ia": {
+      "es_ia": false,
+      "probabilidad_ia": 0.0,
+      "etiqueta": "✍️ Escrito por humano"
+    }
+  },
+  "1QvKkAJD3Uw9ftT-Fji9B-2kOT4iA6WMO": {
+    "titulo": "233291_SujeyCalderonMartinez_AC01.pdf",
+    "tiene_texto": false,
+    "palabras": 0,
+    "tecnologias_detectadas": [
+      {
+        "tecnologia": "Liderazgo / Gestión",
+        "score": 0.632
+      },
+      {
+        "tecnologia": "Educación / Pedagogía",
+        "score": 0.608
+      },
+      {
+        "tecnologia": "Ingeniería Civil",
+        "score": 0.575
+      },
+      {
+        "tecnologia": "Diseño UI/UX",
+        "score": 0.565
+      },
+      {
+        "tecnologia": "Diseño Gráfico",
+        "score": 0.537
+      }
+    ],
+    "analisis_ia": {
+      "es_ia": null,
+      "probabilidad_ia": null,
+      "etiqueta": "⚠️ PDF escaneado sin texto"
+    }
+  },
+  "1RQL3lnT7Nl9gYkRPOS5ESGKV6kb2lI3u": {
+    "titulo": "233291_SujeyCalderonMartinez_Tabla_de_Trazabilidad_de_Requerimientos.pdf",
+    "tiene_texto": true,
+    "palabras": 649,
+    "tecnologias_detectadas": [
+      {
+        "tecnologia": "Comportamiento Organizacional",
+        "score": 0.697
+      },
+      {
+        "tecnologia": "Ingeniería de Software",
+        "score": 0.396
+      },
+      {
+        "tecnologia": "Arquitectura de Computadoras",
+        "score": 0.283
+      },
+      {
+        "tecnologia": "Administración de Proyectos",
+        "score": 0.256
+      }
+    ],
+    "analisis_ia": {
+      "es_ia": false,
+      "probabilidad_ia": 0.0,
+      "etiqueta": "✍️ Escrito por humano"
+    }
+  },
+  "1XsPe8keyoibh8aAfKJixZhVTIiAzolNj": {
+    "titulo": "Sujey-Ingles(2).pdf",
+    "tiene_texto": false,
+    "palabras": 0,
+    "tecnologias_detectadas": [
+      {
+        "tecnologia": "Lingüística / Traducción",
+        "score": 0.879
+      },
+      {
+        "tecnologia": "Ingeniería Civil",
+        "score": 0.755
+      },
+      {
+        "tecnologia": "Matemáticas / Estadística",
+        "score": 0.703
+      },
+      {
+        "tecnologia": "Álgebra / Matemáticas Discretas",
+        "score": 0.683
+      },
+      {
+        "tecnologia": "Diseño Gráfico",
+        "score": 0.671
+      }
+    ],
+    "analisis_ia": {
+      "es_ia": null,
+      "probabilidad_ia": null,
+      "etiqueta": "⚠️ PDF escaneado sin texto"
+    }
+  },
+  "1i5Nr_wU9V5yw0ZQ_GnaCmJ8ankgOCofg": {
+    "titulo": "sujey-ingles.pdf",
+    "tiene_texto": false,
+    "palabras": 0,
+    "tecnologias_detectadas": [
+      {
+        "tecnologia": "Multimedia / Animación",
+        "score": 0.978
+      },
+      {
+        "tecnologia": "Sistemas Embebidos",
+        "score": 0.954
+      },
+      {
+        "tecnologia": "Lingüística / Traducción",
+        "score": 0.929
+      },
+      {
+        "tecnologia": "Inglés",
+        "score": 0.882
+      },
+      {
+        "tecnologia": "Música / Producción de Audio",
+        "score": 0.797
+      }
+    ],
+    "analisis_ia": {
+      "es_ia": null,
+      "probabilidad_ia": null,
+      "etiqueta": "⚠️ PDF escaneado sin texto"
+    }
+  },
+  "19y_xvUQj-vM-u5h-qWoTN8ib98NTvY4x": {
+    "titulo": "SujeyCalderonMartinez_ingles.pdf",
+    "tiene_texto": false,
+    "palabras": 0,
+    "tecnologias_detectadas": [
+      {
+        "tecnologia": "Multimedia / Animación",
+        "score": 0.77
+      },
+      {
+        "tecnologia": "Inglés",
+        "score": 0.686
+      },
+      {
+        "tecnologia": "Diseño Gráfico",
+        "score": 0.637
+      },
+      {
+        "tecnologia": "Liderazgo / Gestión",
+        "score": 0.636
+      },
+      {
+        "tecnologia": "Comportamiento Organizacional",
+        "score": 0.619
+      }
+    ],
+    "analisis_ia": {
+      "es_ia": null,
+      "probabilidad_ia": null,
+      "etiqueta": "⚠️ PDF escaneado sin texto"
+    }
+  },
+  "1LKt5cF3IcJ1FFyF_xDH1QUb95kDBwgUr": {
+    "titulo": "233291_Sujey_Calderon.pdf",
+    "tiene_texto": true,
+    "palabras": 3549,
+    "tecnologias_detectadas": [
+      {
+        "tecnologia": "Comportamiento Organizacional",
+        "score": 0.749
+      },
+      {
+        "tecnologia": "Ingeniería de Software",
+        "score": 0.744
+      },
+      {
+        "tecnologia": "Arquitectura de Computadoras",
+        "score": 0.693
+      },
+      {
+        "tecnologia": "Ética / Filosofía",
+        "score": 0.654
+      },
+      {
+        "tecnologia": "Emprendimiento",
+        "score": 0.652
+      }
+    ],
+    "analisis_ia": {
+      "es_ia": false,
+      "probabilidad_ia": 0.0,
+      "etiqueta": "✍️ Escrito por humano"
+    }
+  },
+  "1j7BIcjJ0Py2_J4Ruv-VcvZjg2ClTrjKO": {
+    "titulo": "233291_CALDERON_SUJEY.pdf",
+    "tiene_texto": true,
+    "palabras": 1510,
+    "tecnologias_detectadas": [
+      {
+        "tecnologia": "Diseño UI/UX",
+        "score": 0.956
+      },
+      {
+        "tecnologia": "Diseño Gráfico",
+        "score": 0.941
+      },
+      {
+        "tecnologia": "Ingeniería de Software",
+        "score": 0.812
+      },
+      {
+        "tecnologia": "JavaScript / Web",
+        "score": 0.715
+      },
+      {
+        "tecnologia": "Emprendimiento",
+        "score": 0.702
+      }
+    ],
+    "analisis_ia": {
+      "es_ia": false,
+      "probabilidad_ia": 0.0,
+      "etiqueta": "✍️ Escrito por humano"
+    }
+  }
+}

@@ -1,6 +1,26 @@
 # classroom_client.py
+import os
+import json
 from googleapiclient.discovery import build
 from auth import get_credentials
+
+CLASSROOM_CACHE_FILE = "classroom_cache.json"
+
+def _load_classroom_cache() -> dict:
+    if os.path.exists(CLASSROOM_CACHE_FILE):
+        try:
+            with open(CLASSROOM_CACHE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            pass
+    return {}
+
+def _save_classroom_cache(cache: dict):
+    try:
+        with open(CLASSROOM_CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=False, indent=2)
+    except:
+        pass
 
 def get_service():
     creds = get_credentials()
@@ -15,7 +35,14 @@ def get_courses():
     result = service.courses().list(pageSize=100).execute()
     return result.get("courses", [])
 
-def get_my_submissions(course_id: str):
+def get_my_submissions(course_id: str, course_state: str = None):
+    # Cargar caché de Classroom
+    cache = _load_classroom_cache()
+    
+    # Si la materia es ARCHIVED y ya está en caché, la devolvemos inmediatamente
+    if course_state == "ARCHIVED" and course_id in cache:
+        return cache[course_id]
+        
     service = get_service()
     work_map = {}
 
@@ -49,123 +76,126 @@ def get_my_submissions(course_id: str):
             # incluir tareas entregadas aunque no tengan calificación
             scores[titulo] = sub.get("draftGrade", 0) or 0
 
+    # Guardar en caché antes de retornar
+    cache[course_id] = scores
+    _save_classroom_cache(cache)
     return scores
 
 def get_all_pdfs_from_drive() -> list:
     drive = get_drive_service()
 
-    res = drive.files().list(
-        q="name='Classroom' and mimeType='application/vnd.google-apps.folder' and trashed=false",
-        fields="files(id, name)",
-        pageSize=10,
-    ).execute()
+    # 1. Traer todas las carpetas del Drive del usuario de forma masiva
+    folders = []
+    page_token = None
+    print("📁 Obteniendo lista de carpetas en Google Drive...")
+    while True:
+        try:
+            res = drive.files().list(
+                q="mimeType='application/vnd.google-apps.folder' and trashed=false",
+                fields="nextPageToken, files(id, name, parents)",
+                pageSize=1000,
+                **({"pageToken": page_token} if page_token else {})
+            ).execute()
+            folders.extend(res.get("files", []))
+            page_token = res.get("nextPageToken")
+            if not page_token:
+                break
+        except Exception as e:
+            print(f"❌ Error al obtener carpetas de Drive: {e}")
+            break
 
-    if not res["files"]:
-        print("❌ No se encontró carpeta Classroom en Drive")
+    if not folders:
+        print("❌ No se encontraron carpetas en Drive")
         return []
 
-    classroom_id = res["files"][0]["id"]
-    print(f"📁 Carpeta Classroom encontrada")
+    # Crear mapa de ID a objeto de carpeta para búsquedas rápidas
+    folder_map = {f["id"]: f for f in folders}
+    
+    # Encontrar la carpeta "Classroom"
+    classroom_folder = next((f for f in folders if f["name"] == "Classroom"), None)
+    if not classroom_folder:
+        print("❌ No se encontró la carpeta 'Classroom' en Google Drive")
+        return []
+    
+    classroom_id = classroom_folder["id"]
+    print(f"📁 Carpeta 'Classroom' encontrada (ID: {classroom_id})")
 
-    todos_folder_ids = [classroom_id]
-    todos_folder_ids += _recolectar_todos_folders(drive, classroom_id)
-    print(f"📂 Total subcarpetas: {len(todos_folder_ids)}")
+    # Mapear parent_id -> list of child_ids en memoria para recorrer el árbol
+    children_map = {}
+    for f in folders:
+        for parent in f.get("parents", []):
+            children_map.setdefault(parent, []).append(f["id"])
 
+    # Encontrar de forma iterativa todas las subcarpetas dentro de "Classroom"
+    todos_folder_ids = set([classroom_id])
+    to_process = [classroom_id]
+    while to_process:
+        curr = to_process.pop()
+        children = children_map.get(curr, [])
+        for child in children:
+            if child not in todos_folder_ids:
+                todos_folder_ids.add(child)
+                to_process.append(child)
+
+    print(f"📂 Total subcarpetas de Classroom mapeadas en memoria: {len(todos_folder_ids)}")
+
+    # 2. Traer todos los PDFs y accesos directos únicamente de las carpetas de Classroom mapeadas
     todos_pdfs = []
-    folder_names = {}
-
-    for i in range(0, len(todos_folder_ids), 5):
-        batch = todos_folder_ids[i:i+5]
-
-        for fid in batch:
+    folder_ids_list = list(todos_folder_ids)
+    limite_lote = 20
+    
+    print("🔍 Buscando todos los PDFs y accesos directos en las carpetas de Classroom...")
+    for k in range(0, len(folder_ids_list), limite_lote):
+        lote = folder_ids_list[k:k+limite_lote]
+        parents_query = " or ".join([f"'{fid}' in parents" for fid in lote])
+        q_string = f"trashed=false and (mimeType='application/pdf' or mimeType='application/vnd.google-apps.shortcut') and ({parents_query})"
+        
+        page_token = None
+        while True:
             try:
-                f = drive.files().get(fileId=fid, fields="id, name").execute()
-                folder_names[fid] = f.get("name", "")
-            except:
-                folder_names[fid] = ""
-
-        for fid in batch:
-            page_token = None
-            while True:
-                try:
-                    # Buscar PDFs Y shortcuts en esta carpeta
-                    result = drive.files().list(
-                        q=f"'{fid}' in parents and trashed=false and (mimeType='application/pdf' or mimeType='application/vnd.google-apps.shortcut')",
-                        fields="nextPageToken, files(id, name, mimeType, shortcutDetails)",
-                        pageSize=100,
-                        **({"pageToken": page_token} if page_token else {})
-                    ).execute()
-
-                    for archivo in result.get("files", []):
-                        carpeta = folder_names.get(fid, "")
-
-                        if archivo["mimeType"] == "application/pdf":
-                            # PDF directo
-                            archivo["carpeta"] = carpeta
-                            todos_pdfs.append(archivo)
-
-                        elif archivo["mimeType"] == "application/vnd.google-apps.shortcut":
-                            # Resolver el shortcut
-                            target_id   = archivo.get("shortcutDetails", {}).get("targetId")
-                            target_mime = archivo.get("shortcutDetails", {}).get("targetMimeType", "")
-
-                            if target_id and "pdf" in target_mime:
-                                try:
-                                    # Obtener el archivo real
-                                    real = drive.files().get(
-                                        fileId=target_id,
-                                        fields="id, name, mimeType"
-                                    ).execute()
-                                    real["carpeta"] = carpeta
-                                    real["nombre_original"] = archivo["name"]
-                                    todos_pdfs.append(real)
-                                except:
-                                    pass
-
-                    page_token = result.get("nextPageToken")
-                    if not page_token:
-                        break
-
-                except Exception as e:
-                    print(f"  ⚠️ Error en folder {fid}: {e}")
+                res = drive.files().list(
+                    q=q_string,
+                    fields="nextPageToken, files(id, name, mimeType, parents, shortcutDetails)",
+                    pageSize=1000,
+                    **({"pageToken": page_token} if page_token else {})
+                ).execute()
+                
+                for archivo in res.get("files", []):
+                    parents = archivo.get("parents", [])
+                    matching_parent = next((p for p in parents if p in todos_folder_ids), None)
+                    if not matching_parent:
+                        continue
+                    
+                    carpeta_nombre = folder_map.get(matching_parent, {}).get("name", "")
+                    
+                    if archivo["mimeType"] == "application/pdf":
+                        archivo["carpeta"] = carpeta_nombre
+                        todos_pdfs.append(archivo)
+                    elif archivo["mimeType"] == "application/vnd.google-apps.shortcut":
+                        # Resolver acceso directo
+                        target_id = archivo.get("shortcutDetails", {}).get("targetId")
+                        target_mime = archivo.get("shortcutDetails", {}).get("targetMimeType", "")
+                        if target_id and "pdf" in target_mime:
+                            try:
+                                real = drive.files().get(
+                                    fileId=target_id,
+                                    fields="id, name, mimeType"
+                                ).execute()
+                                real["carpeta"] = carpeta_nombre
+                                real["nombre_original"] = archivo["name"]
+                                todos_pdfs.append(real)
+                            except Exception as e:
+                                pass
+                
+                page_token = res.get("nextPageToken")
+                if not page_token:
                     break
+            except Exception as e:
+                print(f"❌ Error al obtener archivos de Drive en lote: {e}")
+                break
 
-    print(f"📄 Total PDFs encontrados: {len(todos_pdfs)}")
+    print(f"📄 Total PDFs de Classroom listos para análisis: {len(todos_pdfs)}")
     return todos_pdfs
-
-def _recolectar_todos_folders(drive, parent_id: str, depth: int = 0) -> list:
-    """Recolecta recursivamente todos los folder IDs dentro de parent_id."""
-    if depth > 5:
-        return []
-
-    result = drive.files().list(
-        q=f"'{parent_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false",
-        fields="files(id, name)",
-        pageSize=100,
-    ).execute()
-
-    folders = result.get("files", [])
-    ids = [f["id"] for f in folders]
-
-    for folder in folders:
-        ids += _recolectar_todos_folders(drive, folder["id"], depth + 1)
-
-    return ids
-
-def _get_folder_names(drive, folder_ids: list) -> dict:
-    """Obtiene nombres de folders por ID."""
-    names = {}
-    for i in range(0, len(folder_ids), 100):
-        batch = folder_ids[i:i+100]
-        id_query = " or ".join([f"id='{fid}'" for fid in batch])
-        result = drive.files().list(
-            q=id_query,
-            fields="files(id, name)",
-            pageSize=100,
-        ).execute()
-        for f in result.get("files", []):
-            names[f["id"]] = f["name"]
-    return names
 
 def get_my_drive_files():
     return get_all_pdfs_from_drive()
