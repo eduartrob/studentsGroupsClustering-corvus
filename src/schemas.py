@@ -68,7 +68,7 @@ class TeamUpdateRequest(BaseModel):
 class StudentResponse(BaseModel):
     id: UUID
     name: Optional[str] = None
-    username: str
+    username: Optional[str] = None
     bio: Optional[str] = ""
     avatarUrl: Optional[str] = None
     isVerified: bool = False
