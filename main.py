@@ -16,6 +16,7 @@ from auth import SCOPES, get_credentials
 from sqlalchemy.orm import Session
 from src.database import get_db
 from src.auth import get_current_user
+from src.models import StudentCourse, StudentSubmission, StudentDrivePDF, StudentSkill
 from classroom_client import (
     get_courses, get_my_submissions,
     get_my_drive_files, get_drive_service
@@ -200,10 +201,50 @@ def perfil_completo(
 ):
     user_key = str(current_user.id)
     if not force_refresh:
-        cache = load_profile_cache()
-        if user_key in cache:
-            print(f"⚡ Sirviendo perfil de usuario {current_user.email} desde el caché.")
-            return cache[user_key]
+        # Intentar cargar desde la Base de Datos
+        try:
+            db_skills = db.query(StudentSkill).filter(StudentSkill.student_id == current_user.id).all()
+            if db_skills:
+                print(f"⚡ Sirviendo perfil de usuario {current_user.email} desde la base de datos.")
+                db_courses = db.query(StudentCourse).filter(StudentCourse.student_id == current_user.id).all()
+                db_submissions = db.query(StudentSubmission).filter(StudentSubmission.student_id == current_user.id).all()
+                db_pdfs = db.query(StudentDrivePDF).filter(StudentDrivePDF.student_id == current_user.id).all()
+
+                habilidades = [{
+                    "habilidad": sk.skill_name,
+                    "nivel": sk.level,
+                    "porcentaje": sk.percentage,
+                    "materias": sk.evidence_courses
+                } for sk in db_skills]
+                habilidades.sort(key=lambda x: -x["porcentaje"])
+
+                materias_relevantes = [{
+                    "nombre": c.name,
+                    "tareas": sum(1 for s in db_submissions if s.course_name == c.name),
+                    "promedio": c.average_grade,
+                    "tecnologias": c.detected_technologies
+                } for c in db_courses if len(c.detected_technologies) > 0]
+
+                docs_con_ia = [pdf.name for pdf in db_pdfs if pdf.is_ai_generated]
+
+                return {
+                    "alumno": current_user.email,
+                    "tiempo_ejecucion": "0.0s (Cargado de Base de Datos)",
+                    "resumen": {
+                        "total_materias": len(db_courses),
+                        "materias_relevantes": len(materias_relevantes),
+                        "total_tareas": len(db_submissions),
+                        "total_pdfs_en_drive": len(db_pdfs),
+                        "pdfs_analizados": len(db_pdfs),
+                        "documentos_con_ia": len(docs_con_ia),
+                        "habilidades_detectadas": len(habilidades),
+                    },
+                    "habilidades": habilidades,
+                    "materias": materias_relevantes,
+                    "documentos_con_ia": docs_con_ia,
+                }
+        except Exception as db_cache_err:
+            print(f"⚠️ Error al leer cache de DB, recalculando: {db_cache_err}")
 
     max_pdfs = 15  # Límite interno de PDFs a analizar
     start_time = time.time()
@@ -408,20 +449,84 @@ def perfil_completo(
             "documentos_con_ia": docs_con_ia,
         }
 
-        # Guardar en caché
+        # Guardar en base de datos (y actualizar caché de respaldo)
+        try:
+            # 1. Limpiar registros anteriores del estudiante
+            db.query(StudentSkill).filter(StudentSkill.student_id == current_user.id).delete()
+            db.query(StudentCourse).filter(StudentCourse.student_id == current_user.id).delete()
+            db.query(StudentSubmission).filter(StudentSubmission.student_id == current_user.id).delete()
+            db.query(StudentDrivePDF).filter(StudentDrivePDF.student_id == current_user.id).delete()
+            db.commit()
+
+            # 2. Guardar cursos
+            for m in materias_detalle:
+                course_id = next((c["id"] for c in cursos if c["name"] == m["nombre"]), f"temp_{m['nombre']}")
+                db_course = StudentCourse(
+                    id=course_id,
+                    student_id=current_user.id,
+                    name=m["nombre"],
+                    course_state=next((c.get("courseState") for c in cursos if c["name"] == m["nombre"]), "ACTIVE"),
+                    average_grade=m["promedio"],
+                    detected_technologies=m["tecnologias"]
+                )
+                db.add(db_course)
+
+            # 3. Guardar submissions
+            for t in todas_las_tareas:
+                db_sub = StudentSubmission(
+                    student_id=current_user.id,
+                    course_name=t["curso"],
+                    title=t["tarea"],
+                    grade=t["calificacion"]
+                )
+                db.add(db_sub)
+
+            # 4. Guardar PDFs
+            for doc in documentos:
+                doc_file_id = next((pdf["id"] for pdf in pdfs_a_analizar if pdf["name"] == doc["nombre"]), f"temp_{doc['nombre']}")
+                
+                # Para evitar conflictos de unique constraint con file_id por si acaso
+                db.query(StudentDrivePDF).filter(StudentDrivePDF.file_id == doc_file_id).delete()
+                
+                db_pdf = StudentDrivePDF(
+                    student_id=current_user.id,
+                    file_id=doc_file_id,
+                    name=doc["nombre"],
+                    folder=doc["carpeta"],
+                    is_ai_generated=doc["hecho_con_ia"] or False,
+                    ai_probability=doc["probabilidad_ia"] or 0.0,
+                    detected_technologies=doc["tecnologias"]
+                )
+                db.add(db_pdf)
+
+            # 5. Guardar habilidades/skills
+            for h in habilidades:
+                db_skill = StudentSkill(
+                    student_id=current_user.id,
+                    skill_name=h["habilidad"],
+                    level=h["nivel"],
+                    percentage=h["porcentaje"],
+                    evidence_courses=h["materias"]
+                )
+                db.add(db_skill)
+
+            # 6. Actualizar tags del usuario directamente
+            current_user.tags = [h["habilidad"] for h in habilidades]
+            
+            db.commit()
+            print(f"✅ Guardado perfil del alumno {current_user.email} en base de datos.")
+            
+        except Exception as db_save_err:
+            print(f"⚠️ Error al guardar en base de datos: {db_save_err}")
+            db.rollback()
+
+        # Guardar en caché de respaldo
         try:
             cache = load_profile_cache()
             cache[user_key] = result
             save_profile_cache(cache)
         except Exception as cache_err:
-            print(f"⚠️ Error al guardar en caché: {cache_err}")
-
-        # Actualizar tags en la base de datos
-        try:
-            current_user.tags = [h["habilidad"] for h in habilidades]
-            db.commit()
-        except Exception as db_err:
-            print(f"⚠️ Error al actualizar tags en DB: {db_err}")
+            print(f"⚠️ Error al guardar en caché de respaldo: {cache_err}")
 
         return result
 

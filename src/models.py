@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, Boolean, ForeignKey, DateTime, TEXT, ARRAY
+from sqlalchemy import Column, String, Integer, Boolean, ForeignKey, DateTime, TEXT, ARRAY, Float
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from .database import Base
@@ -75,3 +75,54 @@ class TeamRequest(Base):
     # Relaciones
     team = relationship("Team", back_populates="requests")
     student = relationship("User", back_populates="requests")
+
+
+class StudentCourse(Base):
+    __tablename__ = "student_courses"
+
+    id = Column(String(255), primary_key=True)
+    student_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(255), nullable=False)
+    course_state = Column(String(50), nullable=True)
+    average_grade = Column(Float, default=0.0)
+    detected_technologies = Column(ARRAY(String), default=[])
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class StudentSubmission(Base):
+    __tablename__ = "student_submissions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    student_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    course_name = Column(String(255), nullable=False)
+    title = Column(String(255), nullable=False)
+    grade = Column(Float, default=0.0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class StudentDrivePDF(Base):
+    __tablename__ = "student_drive_pdfs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    student_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    file_id = Column(String(255), unique=True, nullable=False)
+    name = Column(String(255), nullable=False)
+    folder = Column(String(255), nullable=True)
+    is_ai_generated = Column(Boolean, default=False)
+    ai_probability = Column(Float, default=0.0)
+    detected_technologies = Column(ARRAY(String), default=[])
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class StudentSkill(Base):
+    __tablename__ = "student_skills"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    student_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    skill_name = Column(String(100), nullable=False)
+    level = Column(String(50), nullable=False)
+    percentage = Column(Float, default=0.0)
+    evidence_courses = Column(ARRAY(String), default=[])
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
