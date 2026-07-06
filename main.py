@@ -207,6 +207,53 @@ def perfil_completo(
 
     max_pdfs = 15  # Límite interno de PDFs a analizar
     start_time = time.time()
+    
+    # Construir credenciales de Google a partir de la base de datos
+    from google.oauth2.credentials import Credentials
+    from google.auth.transport.requests import Request
+    from auth import request_credentials, SCOPES
+    
+    client_id = None
+    client_secret = None
+    token_uri = "https://oauth2.googleapis.com/token"
+    if os.path.exists("credentials.json"):
+        try:
+            with open("credentials.json", "r") as f:
+                data = json.load(f)
+                web_data = data.get("web", {})
+                client_id = web_data.get("client_id")
+                client_secret = web_data.get("client_secret")
+                token_uri = web_data.get("token_uri", token_uri)
+        except Exception as e:
+            print(f"⚠️ Error al leer credentials.json: {e}")
+            
+    user_creds = None
+    if current_user.google_access_token or current_user.google_refresh_token:
+        user_creds = Credentials(
+            token=current_user.google_access_token,
+            refresh_token=current_user.google_refresh_token,
+            token_uri=token_uri,
+            client_id=client_id,
+            client_secret=client_secret,
+            scopes=SCOPES
+        )
+        
+        if user_creds and user_creds.expired and user_creds.refresh_token:
+            try:
+                user_creds.refresh(Request())
+                current_user.google_access_token = user_creds.token
+                db.commit()
+                print(f"🔄 Token de Google refrescado y guardado para {current_user.email}")
+            except Exception as ref_err:
+                print(f"⚠️ Error al refrescar token de Google: {ref_err}")
+                
+    if not user_creds:
+        raise HTTPException(
+            status_code=401,
+            detail="No se encontraron credenciales de Google en tu cuenta. Por favor inicia sesión con Google primero.",
+        )
+        
+    token_token = request_credentials.set(user_creds)
     try:
         # ── 1. Cursos y tareas
         print("📚 Obteniendo cursos...")
@@ -427,3 +474,5 @@ def perfil_completo(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        request_credentials.reset(token_token)
