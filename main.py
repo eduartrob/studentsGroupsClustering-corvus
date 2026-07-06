@@ -7,12 +7,15 @@ import pickle
 import time
 import json
 from collections import defaultdict
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.responses import RedirectResponse, HTMLResponse
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.http import MediaIoBaseDownload
 from knowledge_base import UNIFICAR
 from auth import SCOPES, get_credentials
+from sqlalchemy.orm import Session
+from src.database import get_db
+from src.auth import get_current_user
 from classroom_client import (
     get_courses, get_my_submissions,
     get_my_drive_files, get_drive_service
@@ -171,11 +174,39 @@ def save_pdf_cache(cache: dict):
     except:
         pass
 
-@app.get("/mi-perfil/completo")
-def perfil_completo():
+PROFILE_CACHE_FILE = "profile_cache.json"
+
+def load_profile_cache() -> dict:
+    if os.path.exists(PROFILE_CACHE_FILE):
+        try:
+            with open(PROFILE_CACHE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            pass
+    return {}
+
+def save_profile_cache(cache: dict):
+    try:
+        with open(PROFILE_CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=False, indent=2)
+    except:
+        pass
+
+@app.get("/teams/mi-perfil/completo")
+def perfil_completo(
+    force_refresh: bool = False,
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    user_key = str(current_user.id)
+    if not force_refresh:
+        cache = load_profile_cache()
+        if user_key in cache:
+            print(f"⚡ Sirviendo perfil de usuario {current_user.email} desde el caché.")
+            return cache[user_key]
+
     max_pdfs = 15  # Límite interno de PDFs a analizar
     start_time = time.time()
-    require_auth()
     try:
         # ── 1. Cursos y tareas
         print("📚 Obteniendo cursos...")
@@ -360,8 +391,8 @@ def perfil_completo():
 
         print(f"✅ {len(habilidades)} habilidades | {len(materias_relevantes)} materias relevantes")
 
-        return {
-            "alumno": "233352@ids.upchiapas.edu.mx",
+        result = {
+            "alumno": current_user.email,
             "tiempo_ejecucion": formatear_tiempo(time.time() - start_time),
             "resumen": {
                 "total_materias":         len(cursos),
@@ -376,6 +407,23 @@ def perfil_completo():
             "materias":          materias_relevantes,
             "documentos_con_ia": docs_con_ia,
         }
+
+        # Guardar en caché
+        try:
+            cache = load_profile_cache()
+            cache[user_key] = result
+            save_profile_cache(cache)
+        except Exception as cache_err:
+            print(f"⚠️ Error al guardar en caché: {cache_err}")
+
+        # Actualizar tags en la base de datos
+        try:
+            current_user.tags = [h["habilidad"] for h in habilidades]
+            db.commit()
+        except Exception as db_err:
+            print(f"⚠️ Error al actualizar tags en DB: {db_err}")
+
+        return result
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
