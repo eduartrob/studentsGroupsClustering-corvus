@@ -22,7 +22,7 @@ from classroom_client import (
     get_my_drive_files, get_drive_service
 )
 from clustering import cluster_students
-from tech_extractor import analizar_documento_completo, detectar_tecnologias
+from tech_extractor import analizar_documento_completo
 from nlp_processor import analizar_perfil_alumno, detectar_tecnologias_por_taxonomia
 from templates import get_auth_success_html
 from src.routers.teams import router as teams_router
@@ -30,6 +30,23 @@ from src.routers.teams import router as teams_router
 app = FastAPI(title="Student Clustering API")
 app.include_router(teams_router)
 _cache: dict = {}
+
+# Whitelist de habilidades válidas de Ingeniería de Software, Sistemas y Negocios
+VALIDS_SKILLS = {
+    "Python", "JavaScript / Web", "Java", "Desarrollo Móvil", "Flutter / Dart",
+    "SQL / Bases de Datos", "MongoDB / NoSQL", "Cloud Computing", "Ciberseguridad",
+    "Redes / Cisco", "Machine Learning / IA", "Deep Learning", "Linux / Sistemas Operativos",
+    "Docker / DevOps", "Git / Control de Versiones", "Ingeniería de Software",
+    "Estructuras de Datos", "Desarrollo Web", "APIs REST", "Compiladores / Autómatas",
+    "Calidad de Software", "Diseño UI/UX", "Blockchain", "Análisis de Datos",
+    "Sistemas Embebidos", "Sistemas Operativos", "Arquitectura de Computadoras",
+    "Métodos Numéricos", "Administración de Proyectos", "Liderazgo / Gestión",
+    "Análisis Financiero", "Marketing / Estrategia", "Recursos Humanos",
+    "Cadena de Suministro", "Emprendimiento", "Inteligencia de Negocios",
+    "Comportamiento Organizacional", "Economía", "Negocios Internacionales",
+    "Ventas / Atención al Cliente", "Gestión de Calidad", "Inglés",
+    "Matemáticas / Estadística", "Álgebra / Matemáticas Discretas"
+}
 
 REDIRECT_URI = "http://localhost:8000/callback"
 os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
@@ -246,7 +263,7 @@ def perfil_completo(
         except Exception as db_cache_err:
             print(f"⚠️ Error al leer cache de DB, recalculando: {db_cache_err}")
 
-    max_pdfs = 15  # Límite interno de PDFs a analizar
+    max_pdfs = 15  # Límite aumentado a 15 para escanear más archivos y obtener habilidades de programación reales
     start_time = time.time()
     
     # Construir credenciales de Google a partir de la base de datos
@@ -423,13 +440,14 @@ def perfil_completo(
                 curso_asociado = buscar_curso_de_carpeta(carpeta)
                 if curso_asociado:
                     for t in techs_doc:
-                        tecnologias_por_curso[curso_asociado].add(t["tecnologia"])
+                        tech_final = UNIFICAR.get(t["tecnologia"], t["tecnologia"])
+                        if tech_final in VALIDS_SKILLS:
+                            tecnologias_por_curso[curso_asociado].add(tech_final)
 
         if cache_updated:
             save_pdf_cache(pdf_cache)
 
-        # ── 4. Calcular habilidades ──────────────────────────────────────
-        print("📊 Calculando habilidades...")
+
 
         # Fusionar duplicados entre ambas fuentes
         tech_pool_unificado = defaultdict(lambda: {"scores": [], "cals": [], "materias": set()})
@@ -441,6 +459,9 @@ def perfil_completo(
 
         habilidades = []
         for tech, data in tech_pool_unificado.items():
+            # Descartar habilidades que no pertenecen al perfil tecnológico o administrativo
+            if tech not in VALIDS_SKILLS:
+                continue
             scores   = data["scores"]
             cals     = data["cals"]
             materias = list(data["materias"])
