@@ -454,11 +454,9 @@ def get_suggestions(
         ~User.id.in_(excluded_ids)
     )
 
-    # 3. Filtrar por habilidad/skill si se solicita (PostgreSQL ARRAY search o búsqueda general)
+    # 3. Filtrar por habilidad/skill si se solicita (búsqueda case-insensitive en el array de tags)
     if skill:
-        # Filtramos utilizando ANY de PostgreSQL (case-insensitive)
-        skill_lower = skill.lower()
-        query = query.filter(User.tags.any(func.lower(skill_lower)))
+        query = query.filter(func.array_to_string(User.tags, ',').ilike(f"%{skill}%"))
 
     students = query.limit(20).all()
 
