@@ -428,8 +428,22 @@ def perfil_completo(
         if cache_updated:
             save_pdf_cache(pdf_cache)
 
-        # ── 4. Calcular habilidades ──────────────────────────────────────
-        print("📊 Calculando habilidades...")
+        # Whitelist de habilidades válidas de Ingeniería de Software, Sistemas y Negocios
+        VALIDS_SKILLS = {
+            "Python", "JavaScript / Web", "Java", "Desarrollo Móvil", "Flutter / Dart",
+            "SQL / Bases de Datos", "MongoDB / NoSQL", "Cloud Computing", "Ciberseguridad",
+            "Redes / Cisco", "Machine Learning / IA", "Deep Learning", "Linux / Sistemas Operativos",
+            "Docker / DevOps", "Git / Control de Versiones", "Ingeniería de Software",
+            "Estructuras de Datos", "Desarrollo Web", "APIs REST", "Compiladores / Autómatas",
+            "Calidad de Software", "Diseño UI/UX", "Blockchain", "Análisis de Datos",
+            "Sistemas Embebidos", "Sistemas Operativos", "Arquitectura de Computadoras",
+            "Métodos Numéricos", "Administración de Proyectos", "Liderazgo / Gestión",
+            "Análisis Financiero", "Marketing / Estrategia", "Recursos Humanos",
+            "Cadena de Suministro", "Emprendimiento", "Inteligencia de Negocios",
+            "Comportamiento Organizacional", "Economía", "Negocios Internacionales",
+            "Ventas / Atención al Cliente", "Gestión de Calidad", "Inglés",
+            "Matemáticas / Estadística", "Álgebra / Matemáticas Discretas"
+        }
 
         # Fusionar duplicados entre ambas fuentes
         tech_pool_unificado = defaultdict(lambda: {"scores": [], "cals": [], "materias": set()})
@@ -441,6 +455,9 @@ def perfil_completo(
 
         habilidades = []
         for tech, data in tech_pool_unificado.items():
+            # Descartar habilidades que no pertenecen al perfil tecnológico o administrativo
+            if tech not in VALIDS_SKILLS:
+                continue
             scores   = data["scores"]
             cals     = data["cals"]
             materias = list(data["materias"])
