@@ -203,10 +203,10 @@ def perfil_completo(
     if not force_refresh:
         # Intentar cargar desde la Base de Datos
         try:
-            db_skills = db.query(StudentSkill).filter(StudentSkill.student_id == current_user.id).all()
-            if db_skills:
+            db_courses = db.query(StudentCourse).filter(StudentCourse.student_id == current_user.id).all()
+            if db_courses:
                 print(f"⚡ Sirviendo perfil de usuario {current_user.email} desde la base de datos.")
-                db_courses = db.query(StudentCourse).filter(StudentCourse.student_id == current_user.id).all()
+                db_skills = db.query(StudentSkill).filter(StudentSkill.student_id == current_user.id).all()
                 db_submissions = db.query(StudentSubmission).filter(StudentSubmission.student_id == current_user.id).all()
                 db_pdfs = db.query(StudentDrivePDF).filter(StudentDrivePDF.student_id == current_user.id).all()
 
