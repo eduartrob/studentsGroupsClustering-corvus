@@ -578,8 +578,8 @@ def sync_perfil(
 
 @app.get("/teams/mi-perfil/completo")
 def perfil_completo(
+    background_tasks: BackgroundTasks,
     force_refresh: bool = False,
-    background_tasks: BackgroundTasks = None,
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -635,6 +635,5 @@ def perfil_completo(
 
     # Si no tiene cache y pide /completo en vez de /sync-perfil
     procesando_actualmente.add(user_key)
-    if background_tasks:
-        background_tasks.add_task(procesar_perfil_en_background, user_key)
+    background_tasks.add_task(procesar_perfil_en_background, user_key)
     return {"status": "processing"}
