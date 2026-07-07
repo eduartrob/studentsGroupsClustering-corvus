@@ -2,6 +2,7 @@
 from classroom_client import get_all_pdfs_from_drive
 import os
 import io
+import requests
 import re
 import pickle
 import time
@@ -331,7 +332,6 @@ def procesar_perfil_en_background(user_id: str):
             # Filtrar inteligentemente con Ollama
             print("🧠 Filtrando PDFs inteligentemente con Ollama local...")
             try:
-                import requests, os
                 llm_url = os.getenv("LLM_URL", "http://localhost:3003") + "/api/v1/llm/filter-software-documents"
                 payload = {
                     "documents": [{"id": p.get("id"), "name": p.get("name"), "folder": p.get("carpeta", "")} for p in todos_pdfs],
