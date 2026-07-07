@@ -328,35 +328,17 @@ def procesar_perfil_en_background(user_id: str):
             documentos = []
             docs_con_ia = []
 
-            # Filtrar inteligentemente con Ollama
-            print("🧠 Filtrando PDFs inteligentemente con Ollama local...")
-            try:
-                llm_url = os.getenv("LLM_URL", "http://localhost:3003") + "/api/v1/llm/filter-software-documents"
-                payload = {
-                    "documents": [{"id": p.get("id"), "name": p.get("name"), "folder": p.get("carpeta", "")} for p in todos_pdfs],
-                    "provider": "ollama"
-                }
-                resp = requests.post(llm_url, json=payload, timeout=60)
-                if resp.status_code == 200:
-                    valid_ids = resp.json().get("valid_ids", [])
-                    if valid_ids:
-                        pdfs_a_analizar = [p for p in todos_pdfs if p.get("id") in valid_ids]
-                        print(f"✅ Ollama filtró {len(pdfs_a_analizar)} PDFs de software de un total de {len(todos_pdfs)}.")
-                    else:
-                        print("⚠️ Ollama no devolvió IDs válidos. Analizando todos por precaución.")
-                        pdfs_a_analizar = todos_pdfs
-                else:
-                    print(f"⚠️ Error del filtro Ollama (status {resp.status_code}). Analizando todos.")
-                    pdfs_a_analizar = todos_pdfs
-            except Exception as e:
-                print(f"⚠️ Error conectando al filtro Ollama: {e}. Analizando todos.")
-                pdfs_a_analizar = todos_pdfs
-
-            total = len(pdfs_a_analizar)
+            total_pdfs = len(todos_pdfs)
             pdf_cache = load_pdf_cache()
             cache_updated = False
+            
+            # Encontrar cuáles PDFs son realmente nuevos (no están en caché)
+            pdfs_nuevos = [p for p in todos_pdfs if p.get("id") not in pdf_cache]
+            print(f"📄 De {total_pdfs} PDFs en total, {len(pdfs_nuevos)} son nuevos y requieren análisis.")
 
-            for i, pdf in enumerate(pdfs_a_analizar):
+            llm_url = os.getenv("LLM_URL", "http://localhost:3003") + "/api/v1/llm/filter-software-documents"
+
+            for i, pdf in enumerate(todos_pdfs):
                 nombre  = pdf.get("name", "")
                 carpeta = pdf.get("carpeta", "")
                 file_id = pdf.get("id", "")
@@ -367,27 +349,49 @@ def procesar_perfil_en_background(user_id: str):
                     prob_ia   = analisis.get("analisis_ia", {}).get("probabilidad_ia")
                     techs_doc = analisis.get("tecnologias_detectadas", [])
                 else:
+                    print(f"🧠 Consultando a Ollama sobre PDF {i+1}/{total_pdfs}: '{nombre}'...")
+                    es_software = True # Por defecto verdadero por precaución
                     try:
-                        # Pequeña pausa para no saturar la API del LLM si procesamos muchos de golpe
-                        time.sleep(2)
-                        
-                        req  = drive.files().get_media(fileId=file_id)
-                        buf  = io.BytesIO()
-                        dl   = MediaIoBaseDownload(buf, req)
-                        done = False
-                        while not done:
-                            _, done = dl.next_chunk()
+                        payload = {
+                            "documents": [{"id": file_id, "name": nombre, "folder": carpeta}],
+                            "provider": "ollama"
+                        }
+                        resp = requests.post(llm_url, json=payload, timeout=15)
+                        if resp.status_code == 200:
+                            valid_ids = resp.json().get("valid_ids", [])
+                            es_software = (file_id in valid_ids)
+                    except Exception as e:
+                        print(f"⚠️ Error conectando a Ollama para '{nombre}', asumiendo que es software por precaución.")
 
-                        analisis  = analizar_documento_completo(buf.getvalue(), nombre)
+                    if not es_software:
+                        print(f"⏭️ Ollama descartó '{nombre}', no es de software. Guardando en caché vacío.")
+                        analisis = {"ignored_by_ollama": True, "analisis_ia": {"es_ia": False}, "tecnologias_detectadas": []}
                         pdf_cache[file_id] = analisis
                         cache_updated = True
+                        es_ia = False
+                        prob_ia = None
+                        techs_doc = []
+                    else:
+                        print(f"✅ Ollama aprobó '{nombre}'. Descargando de Drive y analizando con Groq...")
+                        try:
+                            time.sleep(1) # Pausa para no saturar Groq
+                            req  = drive.files().get_media(fileId=file_id)
+                            buf  = io.BytesIO()
+                            dl   = MediaIoBaseDownload(buf, req)
+                            done = False
+                            while not done:
+                                _, done = dl.next_chunk()
 
-                        es_ia     = analisis.get("analisis_ia", {}).get("es_ia", False)
-                        prob_ia   = analisis.get("analisis_ia", {}).get("probabilidad_ia")
-                        techs_doc = analisis.get("tecnologias_detectadas", [])
-                    except Exception as e:
-                        print(f"⚠️ Error al procesar PDF {nombre}: {e}")
-                        continue
+                            analisis  = analizar_documento_completo(buf.getvalue(), nombre)
+                            pdf_cache[file_id] = analisis
+                            cache_updated = True
+
+                            es_ia     = analisis.get("analisis_ia", {}).get("es_ia", False)
+                            prob_ia   = analisis.get("analisis_ia", {}).get("probabilidad_ia")
+                            techs_doc = analisis.get("tecnologias_detectadas", [])
+                        except Exception as e:
+                            print(f"⚠️ Error al procesar PDF {nombre} con Groq: {e}")
+                            continue
 
                 documentos.append({
                     "nombre":          nombre,
