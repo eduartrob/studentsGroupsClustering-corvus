@@ -8,9 +8,6 @@ pandas
 numpy
 python-dotenv
 PyMuPDF
-transformers
-torch
-sentence-transformers
 sqlalchemy
 psycopg2-binary
 pyjwt
