@@ -446,9 +446,8 @@ def get_suggestions(
         for invite in pending_invites:
             excluded_ids.append(invite.student_id)
 
-    # 2. Filtrar alumnos sin equipo y que no estén excluidos (SOLO ROL STUDENT = 1)
+    # 2. Filtrar alumnos sin equipo y que no estén excluidos (SOLO ROL STUDENT = 3)
     query = db.query(User).filter(
-        User.roleId == 1,
         User.team_id == None,
         User.roleId == 3,
         ~User.id.in_(excluded_ids)
