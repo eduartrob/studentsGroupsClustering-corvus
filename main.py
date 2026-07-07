@@ -250,8 +250,7 @@ def procesar_perfil_en_background(user_id: str):
                 refresh_token=current_user.google_refresh_token,
                 token_uri=token_uri,
                 client_id=client_id,
-                client_secret=client_secret,
-                scopes=SCOPES
+                client_secret=client_secret
             )
             
             if user_creds and user_creds.expired and user_creds.refresh_token:
