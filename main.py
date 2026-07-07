@@ -263,7 +263,7 @@ def perfil_completo(
         except Exception as db_cache_err:
             print(f"⚠️ Error al leer cache de DB, recalculando: {db_cache_err}")
 
-    max_pdfs = 15  # Límite aumentado a 15 para escanear más archivos y obtener habilidades de programación reales
+    max_pdfs = 15  # Límite a 15 para obtener una mejor muestra representativa de habilidades de programación reales
     start_time = time.time()
     
     # Construir credenciales de Google a partir de la base de datos
@@ -380,6 +380,8 @@ def perfil_completo(
         documentos = []
         docs_con_ia = []
 
+        import random
+        random.shuffle(todos_pdfs)
         pdfs_a_analizar = todos_pdfs[:max_pdfs]
         total = len(pdfs_a_analizar)
         print(f"🔍 Analizando {total} de {len(todos_pdfs)} PDFs...")
