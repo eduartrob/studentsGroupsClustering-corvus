@@ -446,10 +446,11 @@ def get_suggestions(
         for invite in pending_invites:
             excluded_ids.append(invite.student_id)
 
-    # 2. Filtrar alumnos sin equipo y que no estén excluidos (SOLO ROL STUDENT = 3)
-    query = db.query(User).filter(
+    # 2. Filtrar alumnos sin equipo y que no estén excluidos (SOLO ROL ALUMNO)
+    from src.models import Role
+    query = db.query(User).join(Role, User.roleId == Role.id).filter(
         User.team_id == None,
-        User.roleId == 3,
+        Role.name == "ALUMNO",
         ~User.id.in_(excluded_ids)
     )
 

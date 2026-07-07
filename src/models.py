@@ -14,7 +14,7 @@ class User(Base):
     password_hash = Column(String(255), nullable=True)
     full_name = Column(String(255), nullable=True)
     profile_picture = Column(TEXT, nullable=True)
-    roleId = Column(Integer, default=1)
+    roleId = Column(Integer, ForeignKey("roles.id"), default=1)
     google_refresh_token = Column(TEXT, nullable=True)
     google_access_token = Column(TEXT, nullable=True)
     team_id = Column(UUID(as_uuid=True), ForeignKey("teams.id", ondelete="SET NULL"), nullable=True)
@@ -30,6 +30,13 @@ class User(Base):
     # Relaciones
     team = relationship("Team", back_populates="members", foreign_keys=[team_id])
     requests = relationship("TeamRequest", back_populates="student", cascade="all, delete-orphan")
+    role = relationship("Role")
+
+class Role(Base):
+    __tablename__ = "roles"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(255), unique=True, nullable=False)
 
 
 class Team(Base):
