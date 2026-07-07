@@ -449,6 +449,7 @@ def get_suggestions(
     # 2. Filtrar alumnos sin equipo y que no estén excluidos
     query = db.query(User).filter(
         User.team_id == None,
+        User.roleId == 3,
         ~User.id.in_(excluded_ids)
     )
 
