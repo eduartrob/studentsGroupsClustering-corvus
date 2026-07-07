@@ -246,7 +246,7 @@ def perfil_completo(
         except Exception as db_cache_err:
             print(f"⚠️ Error al leer cache de DB, recalculando: {db_cache_err}")
 
-    max_pdfs = 15  # Límite interno de PDFs a analizar
+    max_pdfs = 2  # Límite reducido a 2 para evitar timeouts 502 en el API Gateway
     start_time = time.time()
     
     # Construir credenciales de Google a partir de la base de datos

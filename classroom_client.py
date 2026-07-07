@@ -32,7 +32,8 @@ def get_drive_service():
 
 def get_courses():
     service = get_service()
-    result = service.courses().list(pageSize=100).execute()
+    # Solo buscar cursos activos para acelerar el cálculo
+    result = service.courses().list(pageSize=100, courseStates=["ACTIVE"]).execute()
     return result.get("courses", [])
 
 def get_my_submissions(course_id: str, course_state: str = None):
