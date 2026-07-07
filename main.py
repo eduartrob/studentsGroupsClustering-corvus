@@ -22,7 +22,7 @@ from classroom_client import (
     get_my_drive_files, get_drive_service
 )
 from clustering import cluster_students
-from tech_extractor import analizar_documento_completo, detectar_tecnologias
+from tech_extractor import analizar_documento_completo
 from nlp_processor import analizar_perfil_alumno, detectar_tecnologias_por_taxonomia
 from templates import get_auth_success_html
 from src.routers.teams import router as teams_router
