@@ -254,16 +254,16 @@ def perfil_completo(
     from google.auth.transport.requests import Request
     from auth import request_credentials, SCOPES
     
-    client_id = None
-    client_secret = None
+    client_id = os.environ.get("GOOGLE_CLIENT_ID")
+    client_secret = os.environ.get("GOOGLE_CLIENT_SECRET")
     token_uri = "https://oauth2.googleapis.com/token"
-    if os.path.exists("credentials.json"):
+    if os.path.exists("credentials.json") and (not client_id or not client_secret):
         try:
             with open("credentials.json", "r") as f:
                 data = json.load(f)
                 web_data = data.get("web", {})
-                client_id = web_data.get("client_id")
-                client_secret = web_data.get("client_secret")
+                client_id = client_id or web_data.get("client_id")
+                client_secret = client_secret or web_data.get("client_secret")
                 token_uri = web_data.get("token_uri", token_uri)
         except Exception as e:
             print(f"⚠️ Error al leer credentials.json: {e}")
