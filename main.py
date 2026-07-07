@@ -328,11 +328,32 @@ def procesar_perfil_en_background(user_id: str):
             documentos = []
             docs_con_ia = []
 
-            import random
-            random.shuffle(todos_pdfs)
-            pdfs_a_analizar = todos_pdfs[:max_pdfs]
-            total = len(pdfs_a_analizar)
+            # Filtrar inteligentemente con Ollama
+            print("🧠 Filtrando PDFs inteligentemente con Ollama local...")
+            try:
+                import requests, os
+                llm_url = os.getenv("LLM_URL", "http://localhost:3003") + "/api/v1/llm/filter-software-documents"
+                payload = {
+                    "documents": [{"id": p.get("id"), "name": p.get("name"), "folder": p.get("carpeta", "")} for p in todos_pdfs],
+                    "provider": "ollama"
+                }
+                resp = requests.post(llm_url, json=payload, timeout=60)
+                if resp.status_code == 200:
+                    valid_ids = resp.json().get("valid_ids", [])
+                    if valid_ids:
+                        pdfs_a_analizar = [p for p in todos_pdfs if p.get("id") in valid_ids]
+                        print(f"✅ Ollama filtró {len(pdfs_a_analizar)} PDFs de software de un total de {len(todos_pdfs)}.")
+                    else:
+                        print("⚠️ Ollama no devolvió IDs válidos. Analizando todos por precaución.")
+                        pdfs_a_analizar = todos_pdfs
+                else:
+                    print(f"⚠️ Error del filtro Ollama (status {resp.status_code}). Analizando todos.")
+                    pdfs_a_analizar = todos_pdfs
+            except Exception as e:
+                print(f"⚠️ Error conectando al filtro Ollama: {e}. Analizando todos.")
+                pdfs_a_analizar = todos_pdfs
 
+            total = len(pdfs_a_analizar)
             pdf_cache = load_pdf_cache()
             cache_updated = False
 
@@ -348,6 +369,9 @@ def procesar_perfil_en_background(user_id: str):
                     techs_doc = analisis.get("tecnologias_detectadas", [])
                 else:
                     try:
+                        # Pequeña pausa para no saturar la API del LLM si procesamos muchos de golpe
+                        time.sleep(2)
+                        
                         req  = drive.files().get_media(fileId=file_id)
                         buf  = io.BytesIO()
                         dl   = MediaIoBaseDownload(buf, req)
