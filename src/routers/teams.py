@@ -450,6 +450,7 @@ def get_suggestions(
     query = db.query(User).filter(
         User.roleId == 1,
         User.team_id == None,
+        User.roleId == 3,
         ~User.id.in_(excluded_ids)
     )
 
