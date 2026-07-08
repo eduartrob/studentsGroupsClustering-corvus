@@ -334,11 +334,13 @@ def procesar_perfil_en_background(user_id: str):
             
             # Encontrar cuáles PDFs son realmente nuevos (no están en caché)
             pdfs_nuevos = [p for p in todos_pdfs if p.get("id") not in pdf_cache]
-            print(f"📄 De {total_pdfs} PDFs en total, {len(pdfs_nuevos)} son nuevos y requieren análisis.")
+            # Limitar a los primeros 5 PDFs para que termine rápido
+            pdfs_limitados = todos_pdfs[:5]
+            print(f"📄 De {len(todos_pdfs)} PDFs en total, limitando análisis profundo a {len(pdfs_limitados)} PDFs para demo.")
 
             llm_url = os.getenv("LLM_URL", "http://localhost:3003") + "/api/v1/llm/filter-software-documents"
 
-            for i, pdf in enumerate(todos_pdfs):
+            for i, pdf in enumerate(pdfs_limitados):
                 nombre  = pdf.get("name", "")
                 carpeta = pdf.get("carpeta", "")
                 file_id = pdf.get("id", "")
@@ -509,7 +511,7 @@ def procesar_perfil_en_background(user_id: str):
                     db.add(db_sub)
 
                 for doc in documentos:
-                    doc_file_id = next((pdf["id"] for pdf in pdfs_a_analizar if pdf["name"] == doc["nombre"]), f"temp_{doc['nombre']}")
+                    doc_file_id = next((pdf["id"] for pdf in todos_pdfs if pdf["name"] == doc["nombre"]), f"temp_{doc['nombre']}")
                     db.query(StudentDrivePDF).filter(StudentDrivePDF.file_id == doc_file_id).delete()
                     
                     db_pdf = StudentDrivePDF(
