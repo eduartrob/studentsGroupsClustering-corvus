@@ -425,43 +425,7 @@ def accept_request(
 # 2.3. SUGERENCIAS DE CANDIDATOS
 # =========================================================================
 
-from src.models import UserSkill, Skill
 
-@router.get("/mi-perfil/completo")
-def perfil_completo(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    # Fetch user skills
-    user_skills = db.query(UserSkill).filter(UserSkill.userId == current_user.id).all()
-    habilidades = []
-    for us in user_skills:
-        skill = db.query(Skill).filter(Skill.id == us.skillId).first()
-        if skill:
-            habilidades.append({
-                "habilidad": skill.name,
-                "nivel": "Intermedio",
-                "porcentaje": 100,
-                "materias": []
-            })
-    
-    return {
-        "status": "completed",
-        "alumno": current_user.email,
-        "tiempo_ejecucion": "0.0s",
-        "resumen": {
-            "total_materias": 0,
-            "materias_relevantes": 0,
-            "total_tareas": 0,
-            "total_pdfs_en_drive": 0,
-            "pdfs_analizados": 0,
-            "documentos_con_ia": 0,
-            "habilidades_detectadas": len(habilidades),
-        },
-        "habilidades": habilidades,
-        "materias": [],
-        "documentos_con_ia": [],
-    }
 
 @router.get("/suggestions", response_model=List[StudentResponse])
 def get_suggestions(
@@ -480,10 +444,13 @@ def get_suggestions(
             excluded_ids.append(invite.student_id)
 
     # 2. Filtrar alumnos sin equipo (ALUMNO)
-    from src.models import Role
+    from ..models import Role
     query = db.query(User).join(Role, User.roleId == Role.id).filter(
         User.team_id == None,
         Role.name == "ALUMNO",
+        User.universityId == current_user.universityId,
+        User.careerId == current_user.careerId,
+        User.semester == current_user.semester,
         ~User.id.in_(excluded_ids)
     )
 
@@ -528,6 +495,53 @@ def get_suggestions(
                 avatarUrl=s.profile_picture,
                 isVerified=s.is_verified,
                 tags=s_tags
+        )
+    return response
+
+@router.get("/students", response_model=List[StudentResponse])
+def get_student_directory(
+    skill: Optional[str] = Query(None, description="Filtro opcional por tag o habilidad"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Directorio de alumnos con filtro estricto por universidad, carrera y cuatrimestre.
+    Se excluyen alumnos que ya tienen equipo y al propio usuario.
+    """
+    from ..models import Role, UserSkill
+    
+    query = db.query(User).join(Role, User.roleId == Role.id).filter(
+        User.team_id == None,
+        Role.name == "ALUMNO",
+        User.id != current_user.id,
+        User.universityId == current_user.universityId,
+        User.careerId == current_user.careerId,
+        User.semester == current_user.semester
+    )
+    
+    students = query.all()
+    
+    response = []
+    for s in students:
+        s_skills_db = db.query(UserSkill).filter(UserSkill.userId == s.id).all()
+        s_tags = [sk.skill.name for sk in s_skills_db if sk.skill]
+        
+        if skill:
+            skill_lower = skill.lower()
+            has_skill = any(skill_lower in t.lower() for t in s_tags)
+            if not has_skill:
+                continue
+
+        response.append(
+            StudentResponse(
+                id=s.id,
+                name=s.full_name or s.username,
+                username=s.username,
+                bio=s.bio,
+                avatarUrl=s.profile_picture,
+                isVerified=s.is_verified,
+                tags=s_tags
             )
         )
+        
     return response

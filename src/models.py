@@ -24,6 +24,10 @@ class User(Base):
     tags = Column(ARRAY(String), default=[])
     is_verified = Column(Boolean, default=False)
     
+    universityId = Column(UUID(as_uuid=True), ForeignKey("universities.id", ondelete="SET NULL"), nullable=True)
+    careerId = Column(UUID(as_uuid=True), ForeignKey("careers.id", ondelete="SET NULL"), nullable=True)
+    semester = Column(String(255), nullable=True)
+    
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -31,6 +35,19 @@ class User(Base):
     team = relationship("Team", back_populates="members", foreign_keys=[team_id])
     requests = relationship("TeamRequest", back_populates="student", cascade="all, delete-orphan")
     role = relationship("Role")
+    university = relationship("University")
+    career = relationship("Career")
+
+class University(Base):
+    __tablename__ = "universities"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(255), unique=True, nullable=False)
+
+class Career(Base):
+    __tablename__ = "careers"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(255), unique=True, nullable=False)
+
 
 class Role(Base):
     __tablename__ = "roles"
