@@ -3,9 +3,13 @@ from contextlib import asynccontextmanager
 from src.routers.teams import router as teams_router
 from src.rabbitmq import start_rabbitmq_consumer
 
+from src.database import engine, Base
+import src.models
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
+    Base.metadata.create_all(bind=engine)
     rabbitmq_conn = await start_rabbitmq_consumer()
     yield
     # Shutdown

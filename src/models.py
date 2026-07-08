@@ -27,6 +27,7 @@ class User(Base):
     universityId = Column(UUID(as_uuid=True), ForeignKey("universities.id", ondelete="SET NULL"), nullable=True)
     careerId = Column(UUID(as_uuid=True), ForeignKey("careers.id", ondelete="SET NULL"), nullable=True)
     semester = Column(String(255), nullable=True)
+    cluster_id = Column(Integer, nullable=True)
     
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

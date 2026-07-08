@@ -6,7 +6,7 @@ from uuid import UUID
 from datetime import datetime
 
 from ..database import get_db
-from ..models import User, Team, TeamSocialLink, TeamRequest
+from ..models import User, Team, TeamSocialLink, TeamRequest, UserSkill, Skill
 from ..schemas import (
     TeamResponse, TeamUpdateRequest, ProjectResponse, MemberResponse,
     SocialLinkResponse, RequestResponse, RequestCreate, StudentResponse
@@ -445,14 +445,21 @@ def get_suggestions(
 
     # 2. Filtrar alumnos sin equipo (ALUMNO)
     from ..models import Role
-    query = db.query(User).join(Role, User.roleId == Role.id).filter(
+    
+    filters = [
         User.team_id == None,
         Role.name == "ALUMNO",
         User.universityId == current_user.universityId,
         User.careerId == current_user.careerId,
         User.semester == current_user.semester,
         ~User.id.in_(excluded_ids)
-    )
+    ]
+    
+    # ML Feature: Si el usuario ya fue agrupado por K-Means, sugerir a los grupos opuestos/complementarios
+    if current_user.cluster_id is not None:
+        filters.append(User.cluster_id != current_user.cluster_id)
+        
+    query = db.query(User).join(Role, User.roleId == Role.id).filter(*filters)
 
     students = query.all()
     
@@ -495,6 +502,7 @@ def get_suggestions(
                 avatarUrl=s.profile_picture,
                 isVerified=s.is_verified,
                 tags=s_tags
+            )
         )
     return response
 

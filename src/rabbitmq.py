@@ -57,6 +57,38 @@ async def process_profile_update(message: aio_pika.IncomingMessage):
                     
                     db.commit()
                     print(f"✅ Habilidades actualizadas en Clustering para User {user_id}")
+                    
+                    # --- Trigger Background Clustering ---
+                    if user.universityId and user.careerId and user.semester:
+                        # 1. Obtener todos los alumnos del mismo grupo
+                        from src.models import Role
+                        alumnos = db.query(User).join(Role, User.roleId == Role.id).filter(
+                            Role.name == "ALUMNO",
+                            User.universityId == user.universityId,
+                            User.careerId == user.careerId,
+                            User.semester == user.semester
+                        ).all()
+                        
+                        # 2. Formatear data
+                        users_data = []
+                        for a in alumnos:
+                            # Obtener skills
+                            a_skills_db = db.query(UserSkill).filter(UserSkill.userId == a.id).all()
+                            a_skill_ids = [us.skillId for us in a_skills_db]
+                            a_skill_names = [db.query(Skill).filter(Skill.id == sid).first().name for sid in a_skill_ids if db.query(Skill).filter(Skill.id == sid).first()]
+                            users_data.append({"id": a.id, "skills": a_skill_names})
+                            
+                        # 3. Correr ML Clustering
+                        import clustering
+                        cluster_map = clustering.cluster_students_by_skills(users_data)
+                        
+                        # 4. Actualizar base de datos
+                        for a in alumnos:
+                            if a.id in cluster_map:
+                                a.cluster_id = cluster_map[a.id]
+                        db.commit()
+                        print(f"🧠 ML Clustering re-calculado para el grupo de {user_id}")
+                        
                 except Exception as e:
                     print(f"❌ Error actualizando habilidades en DB: {e}")
                     db.rollback()
