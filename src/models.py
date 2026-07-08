@@ -133,3 +133,20 @@ class StudentSkill(Base):
     evidence_courses = Column(ARRAY(String), default=[])
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class Skill(Base):
+    __tablename__ = "skills"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(255), unique=True, nullable=False)
+
+
+class UserSkill(Base):
+    __tablename__ = "user_skills"
+
+    userId = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    skillId = Column(UUID(as_uuid=True), ForeignKey("skills.id", ondelete="CASCADE"), primary_key=True)
+    
+    # Relaciones (opcionales)
+    user = relationship("User", backref="user_skills")
+    skill = relationship("Skill")
