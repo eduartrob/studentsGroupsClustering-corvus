@@ -3,8 +3,8 @@ import json
 import asyncio
 import aio_pika
 from sqlalchemy.orm import Session
-from src.database import SessionLocal
-from src.models import User, UserSkill, Skill
+from core.database import SessionLocal
+from models.models import User, UserSkill, Skill
 
 RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
 EXCHANGE_NAME = "corvus_events"
@@ -79,8 +79,8 @@ async def process_profile_update(message: aio_pika.IncomingMessage):
                             users_data.append({"id": a.id, "skills": a_skill_names})
                             
                         # 3. Correr ML Clustering
-                        import clustering
-                        cluster_map = clustering.cluster_students_by_skills(users_data)
+                        from services.clustering_service import cluster_students_by_skills
+                        cluster_map = cluster_students_by_skills(users_data)
                         
                         # 4. Actualizar base de datos
                         for a in alumnos:
@@ -120,3 +120,26 @@ async def start_rabbitmq_consumer():
     except Exception as e:
         print(f"❌ Error conectando a RabbitMQ: {e}")
         return None
+
+async def publish_push_notification(user_id: str, title: str, body: str, data: dict = None):
+    try:
+        connection = await aio_pika.connect_robust(RABBITMQ_URL)
+        channel = await connection.channel()
+        exchange = await channel.declare_exchange(
+            EXCHANGE_NAME, aio_pika.ExchangeType.TOPIC, durable=True
+        )
+        
+        message_body = {
+            "user_id": user_id,
+            "title": title,
+            "body": body,
+            "data": data or {}
+        }
+        
+        await exchange.publish(
+            aio_pika.Message(body=json.dumps(message_body).encode()),
+            routing_key="notifications.push.send"
+        )
+        await connection.close()
+    except Exception as e:
+        print(f"❌ Error publicando notificación Push: {e}")

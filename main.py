@@ -1,10 +1,10 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from src.routers.teams import router as teams_router
-from src.rabbitmq import start_rabbitmq_consumer
+from api.teams import router as teams_router
+from services.rabbitmq_service import start_rabbitmq_consumer
 
-from src.database import engine, Base
-import src.models
+from core.database import engine, Base
+import models.models
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

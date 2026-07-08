@@ -5,13 +5,13 @@ from typing import List, Optional
 from uuid import UUID
 from datetime import datetime
 
-from ..database import get_db
-from ..models import User, Team, TeamSocialLink, TeamRequest, UserSkill, Skill
-from ..schemas import (
+from core.database import get_db
+from models.models import User, Team, TeamSocialLink, TeamRequest, UserSkill, Skill
+from models.schemas import (
     TeamResponse, TeamUpdateRequest, ProjectResponse, MemberResponse,
     SocialLinkResponse, RequestResponse, RequestCreate, StudentResponse
 )
-from ..auth import get_current_user
+from core.auth import get_current_user
 
 router = APIRouter(prefix="/teams", tags=["Teams"])
 
@@ -43,6 +43,10 @@ def get_my_team(
 
     # Cargar integrantes y formatear
     members = db.query(User).filter(User.team_id == team.id).all()
+    
+    # Ordenar para que el admin (admin_id) quede primero
+    members.sort(key=lambda m: 0 if m.id == team.admin_id else 1)
+    
     members_response = []
     for m in members:
         members_response.append(
@@ -95,6 +99,12 @@ def update_my_team(
             detail="El equipo no existe."
         )
 
+    if team.admin_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo el administrador del equipo puede modificar esta configuración."
+        )
+
     # Actualizar datos básicos
     team.name = update_data.name
     team.description = update_data.description
@@ -133,13 +143,18 @@ def leave_team(
 
     old_team_id = current_user.team_id
     current_user.team_id = None
-    db.commit()
+    
+    # Check if the user was the admin
+    team = db.query(Team).filter(Team.id == old_team_id).first()
+    if team and team.admin_id == current_user.id:
+        # User is the admin, need to assign new admin or delete team
+        remaining_member = db.query(User).filter(User.team_id == old_team_id).first()
+        if remaining_member:
+            team.admin_id = remaining_member.id
+        else:
+            db.delete(team)
 
-    # Si el equipo se queda sin integrantes, se elimina automáticamente
-    active_members_count = db.query(User).filter(User.team_id == old_team_id).count()
-    if active_members_count == 0:
-        db.query(Team).filter(Team.id == old_team_id).delete()
-        db.commit()
+    db.commit()
 
     return {"message": "Has salido del equipo con éxito"}
 
@@ -157,6 +172,13 @@ def remove_member(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No perteneces a ningún equipo."
+        )
+
+    team = db.query(Team).filter(Team.id == current_user.team_id).first()
+    if team and team.admin_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo el administrador puede expulsar integrantes."
         )
 
     # Verificar que el usuario a expulsar sea de tu equipo y no seas tú mismo
@@ -186,7 +208,7 @@ def remove_member(
 
 @router.get("/requests", response_model=List[RequestResponse])
 def get_requests(
-    filter: str = Query(..., description="Filtros válidos: 'aceptadas' o 'enviadas'"),
+    filter: str = Query(..., description="Filtros válidos: 'recibidas' o 'enviadas'"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -207,22 +229,16 @@ def get_requests(
             TeamRequest.state == "PENDIENTE"
         ).all()
 
-    elif filter == "aceptadas":
-        # Mostrar solicitudes que ya se aceptaron asociadas a este usuario o su equipo
-        if current_user.team_id:
-            requests = query.filter(
-                TeamRequest.team_id == current_user.team_id,
-                TeamRequest.state == "ACEPTADA"
-            ).all()
-        else:
-            requests = query.filter(
-                TeamRequest.student_id == current_user.id,
-                TeamRequest.state == "ACEPTADA"
-            ).all()
+    elif filter == "recibidas":
+        # Mostrar solicitudes PENDIENTES donde el usuario sea el destino
+        requests = query.filter(
+            TeamRequest.student_id == current_user.id,
+            TeamRequest.state == "PENDIENTE"
+        ).all()
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Filtro no válido. Usa 'enviadas' o 'aceptadas'."
+            detail="Filtro no válido. Usa 'enviadas' o 'recibidas'."
         )
 
     # Mapeo a respuesta
@@ -262,7 +278,8 @@ def invite_student(
         # Por ahora creamos un equipo por defecto para el flujo
         new_team = Team(
             name=f"Equipo de {current_user.full_name or current_user.username}",
-            description="Equipo creado automáticamente al enviar invitación."
+            description="Equipo creado automáticamente al enviar invitación.",
+            admin_id=current_user.id
         )
         db.add(new_team)
         db.commit()
@@ -288,14 +305,7 @@ def invite_student(
             detail="El alumno que deseas invitar no existe."
         )
 
-    # 4. Validar que el alumno no tenga ya un equipo
-    if student.team_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El estudiante seleccionado ya forma parte de otro equipo."
-        )
-
-    # 5. Evitar invitaciones duplicadas pendientes
+    # 4. Evitar invitaciones duplicadas pendientes
     existing_request = db.query(TeamRequest).filter(
         TeamRequest.team_id == team.id,
         TeamRequest.student_id == body.studentId,
@@ -307,7 +317,7 @@ def invite_student(
             detail="Ya existe una invitación pendiente enviada a este estudiante."
         )
 
-    # 6. Crear la solicitud
+    # 5. Crear la solicitud
     new_request = TeamRequest(
         team_id=team.id,
         student_id=body.studentId,
@@ -316,6 +326,19 @@ def invite_student(
     db.add(new_request)
     db.commit()
     db.refresh(new_request)
+
+    # 6. Notificar por FCM
+    import asyncio
+    from services.rabbitmq_service import publish_push_notification
+    try:
+        asyncio.run(publish_push_notification(
+            user_id=str(student.id),
+            title="Nueva invitación de equipo",
+            body=f"{current_user.full_name or current_user.username} te ha invitado a su equipo.",
+            data={"type": "TEAM_INVITE", "requestId": str(new_request.id)}
+        ))
+    except Exception as e:
+        print(f"Error sending push notification: {e}")
 
     return RequestResponse(
         id=new_request.id,
@@ -406,10 +429,20 @@ def accept_request(
             detail="La invitación ya no es válida porque el equipo se encuentra lleno."
         )
 
+    # Si el alumno ya tenía un equipo, sacarlo y gestionar el admin
+    if current_user.team_id and current_user.team_id != request.team_id:
+        old_team_id = current_user.team_id
+        old_team = db.query(Team).filter(Team.id == old_team_id).first()
+        if old_team and old_team.admin_id == current_user.id:
+            remaining_member = db.query(User).filter(User.team_id == old_team_id, User.id != current_user.id).first()
+            if remaining_member:
+                old_team.admin_id = remaining_member.id
+            else:
+                db.delete(old_team)
+
     # Actualizar estado de la solicitud y unir al estudiante al equipo
     request.state = "ACEPTADA"
     current_user.team_id = request.team_id
-    db.commit()
 
     # Cancelar cualquier otra solicitud pendiente que tuviese este estudiante
     db.query(TeamRequest).filter(
@@ -488,8 +521,8 @@ def get_suggestions(
     # Ordenar por mayor complementariedad, luego por total de habilidades (para desempatar)
     student_scores.sort(key=lambda x: (x[0], len(x[2])), reverse=True)
     
-    # Tomar los top 20
-    top_students = student_scores[:20]
+    # Tomar todos los estudiantes ordenados
+    top_students = student_scores
 
     response = []
     for score, s, s_tags in top_students:

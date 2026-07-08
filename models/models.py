@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import Column, String, Integer, Boolean, ForeignKey, DateTime, TEXT, ARRAY, Float
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-from .database import Base
+from core.database import Base
 
 class User(Base):
     __tablename__ = "users"
@@ -66,6 +66,7 @@ class Team(Base):
     project_title = Column(String(255), default="Sistema de gestión de equipos")
     project_description = Column(TEXT, default="Herramienta colaborativa para conectar estudiantes y optimizar la asignación de proyectos académicos.")
     max_members = Column(Integer, default=3)
+    admin_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

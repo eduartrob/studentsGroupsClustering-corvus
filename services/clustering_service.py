@@ -6,52 +6,7 @@ from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import MultiLabelBinarizer
 
-def cluster_students(course_grades: dict, n_clusters: int = 4):
-    """
-    (Legacy function)
-    """
-    records = []
-    for uid, data in course_grades.items():
-        row = {"id": uid, "name": data["name"]}
-        row.update(data["scores"])
-        records.append(row)
 
-    df = pd.DataFrame(records).set_index("id")
-    names = df["name"]
-    df = df.drop(columns=["name"]).fillna(0)
-
-    if df.empty or len(df) < n_clusters:
-        raise ValueError("No hay suficientes datos para clustering")
-
-    scaler = StandardScaler()
-    X = scaler.fit_transform(df)
-
-    kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-    labels = kmeans.fit_predict(X)
-
-    pca = PCA(n_components=2)
-    coords = pca.fit_transform(X)
-
-    cluster_means = pd.Series(labels).groupby(labels).apply(
-        lambda idx: X[idx.index].mean()
-    )
-    sorted_clusters = cluster_means.sort_values(ascending=False).index.tolist()
-    level_names = ["Experto", "Avanzado", "Intermedio", "Básico"]
-    cluster_to_level = {c: level_names[i] for i, c in enumerate(sorted_clusters[:n_clusters])}
-
-    results = []
-    for i, (uid, row) in enumerate(df.iterrows()):
-        results.append({
-            "student_id": uid,
-            "name": names[uid],
-            "cluster": int(labels[i]),
-            "level": cluster_to_level[labels[i]],
-            "pca_x": float(coords[i][0]),
-            "pca_y": float(coords[i][1]),
-            "avg_score": float(row.mean()),
-        })
-
-    return results
 
 def cluster_students_by_skills(users_data: list):
     """
