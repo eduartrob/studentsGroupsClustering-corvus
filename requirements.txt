@@ -11,3 +11,4 @@ PyMuPDF
 sqlalchemy
 psycopg2-binary
 pyjwt
+aio-pika
