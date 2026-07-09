@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from typing import List, Optional
 from uuid import UUID
 from datetime import datetime
@@ -244,19 +244,27 @@ def get_requests(
     # Mapeo a respuesta
     response = []
     for r in requests:
+        # Si la envié yo, quiero ver a quién se la envié (r.student).
+        # Si la recibí yo, quiero ver quién me la envió (el admin del equipo emisor).
+        if filter == "recibidas":
+            team_admin = db.query(User).filter(User.id == r.team.admin_id).first()
+            target_user = team_admin if team_admin else r.student
+        else:
+            target_user = r.student
+
         response.append(
             RequestResponse(
                 id=r.id,
                 state=r.state,
                 date=r.created_at,
                 student=StudentResponse(
-                    id=r.student.id,
-                    name=r.student.full_name or r.student.username,
-                    username=r.student.username,
-                    bio=r.student.bio,
-                    avatarUrl=r.student.profile_picture,
-                    isVerified=r.student.is_verified,
-                    tags=r.student.tags
+                    id=target_user.id,
+                    name=target_user.full_name or target_user.username,
+                    username=target_user.username,
+                    bio=target_user.bio,
+                    avatarUrl=target_user.profile_picture,
+                    isVerified=target_user.is_verified,
+                    tags=target_user.tags
                 )
             )
         )
@@ -272,6 +280,12 @@ def invite_student(
     """
     Envía una invitación a un alumno candidato.
     """
+    if body.studentId == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No puedes enviarte una invitación a ti mismo."
+        )
+
     # 1. Validar que el emisor pertenezca a un equipo
     if not current_user.team_id:
         # Opcional: Podríamos autocrear el equipo aquí si no tiene uno.
@@ -418,40 +432,101 @@ def accept_request(
         )
 
     # Validar que el equipo emisor no se haya llenado mientras tanto
-    team = db.query(Team).filter(Team.id == request.team_id).first()
-    members_count = db.query(User).filter(User.team_id == team.id).count()
-    if members_count >= team.max_members:
-        # Cancelar esta solicitud automáticamente
-        request.state = "CANCELADA"
-        db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La invitación ya no es válida porque el equipo se encuentra lleno."
-        )
+    sender_team = db.query(Team).filter(Team.id == request.team_id).first()
+    sender_members_count = db.query(User).filter(User.team_id == sender_team.id).count()
 
-    # Si el alumno ya tenía un equipo, sacarlo y gestionar el admin
-    if current_user.team_id and current_user.team_id != request.team_id:
-        old_team_id = current_user.team_id
-        old_team = db.query(Team).filter(Team.id == old_team_id).first()
-        if old_team and old_team.admin_id == current_user.id:
-            remaining_member = db.query(User).filter(User.team_id == old_team_id, User.id != current_user.id).first()
-            if remaining_member:
-                old_team.admin_id = remaining_member.id
-            else:
-                db.delete(old_team)
+    # Averiguar estado del equipo receptor (el current_user)
+    receiver_team_id = current_user.team_id
+    receiver_members_count = 0
+    receiver_team = None
+    if receiver_team_id:
+        receiver_team = db.query(Team).filter(Team.id == receiver_team_id).first()
+        receiver_members_count = db.query(User).filter(User.team_id == receiver_team_id).count()
 
-    # Actualizar estado de la solicitud y unir al estudiante al equipo
-    request.state = "ACEPTADA"
-    current_user.team_id = request.team_id
+    # ========================================================
+    # LÓGICA BIDIRECCIONAL BASADA EN TAMAÑO DE EQUIPO
+    # ========================================================
+    # Si el Receptor ya tiene un equipo (2+ personas) y el Emisor está solo (1 persona):
+    if receiver_members_count > 1 and sender_members_count == 1:
+        # El Emisor (Sender) se unirá al equipo del Receptor.
+        # Validar si el equipo del Receptor tiene cupo para el Emisor
+        if receiver_members_count >= receiver_team.max_members:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Tu equipo ya se encuentra lleno, por lo que esta persona no puede unirse a tu equipo."
+            )
+
+        # El Emisor es el único miembro de su equipo (que es él mismo, el admin_id).
+        sender_user = db.query(User).filter(User.id == sender_team.admin_id).first()
+        
+        # El Emisor se une al equipo del Receptor
+        sender_user.team_id = receiver_team.id
+        
+        # El equipo del Emisor queda vacío, lo borramos.
+        db.delete(sender_team)
+        
+        # Actualizamos la solicitud a ACEPTADA
+        request.state = "ACEPTADA"
+        
+        # El Receptor NO cambia de equipo. Se queda en su propio equipo.
+        target_team_name = receiver_team.name
+        user_to_notify_id = sender_user.id
+        notification_title = "¡Te has unido a un equipo!"
+        notification_body = f"{current_user.full_name or current_user.username} aceptó tu invitación y te ha integrado a su equipo."
+        
+    else:
+        # LÓGICA ORIGINAL: El Receptor se une al equipo del Emisor.
+        if sender_members_count >= sender_team.max_members:
+            # Cancelar esta solicitud automáticamente
+            request.state = "CANCELADA"
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La invitación ya no es válida porque el equipo del emisor se encuentra lleno."
+            )
+            
+        # Si el Receptor tenía un equipo anterior, debe abandonarlo.
+        if receiver_team_id and receiver_team_id != request.team_id:
+            old_team = receiver_team
+            if old_team and old_team.admin_id == current_user.id:
+                remaining_member = db.query(User).filter(User.team_id == old_team.id, User.id != current_user.id).first()
+                if remaining_member:
+                    old_team.admin_id = remaining_member.id
+                else:
+                    db.delete(old_team)
+                    
+        # El Receptor se une al equipo del Emisor
+        current_user.team_id = request.team_id
+        request.state = "ACEPTADA"
+        
+        target_team_name = sender_team.name
+        user_to_notify_id = sender_team.admin_id
+        notification_title = "¡Nuevo miembro en tu equipo!"
+        notification_body = f"{current_user.full_name or current_user.username} ha aceptado tu invitación."
 
     # Cancelar cualquier otra solicitud pendiente que tuviese este estudiante
     db.query(TeamRequest).filter(
         TeamRequest.student_id == current_user.id,
-        TeamRequest.state == "PENDIENTE"
+        TeamRequest.state == "PENDIENTE",
+        TeamRequest.id != request.id
     ).delete()
+    
     db.commit()
 
-    return {"message": f"Te has unido al equipo '{team.name}' exitosamente."}
+    # Notificar al usuario afectado en tiempo real
+    import asyncio
+    from services.rabbitmq_service import publish_push_notification
+    try:
+        asyncio.run(publish_push_notification(
+            user_id=str(user_to_notify_id),
+            title=notification_title,
+            body=notification_body,
+            data={"type": "team_accept"}
+        ))
+    except Exception as e:
+        print(f"Error publishing accept notification: {e}")
+
+    return {"message": f"Operación exitosa con el equipo '{target_team_name}'."}
 
 
 # =========================================================================
@@ -463,6 +538,7 @@ def accept_request(
 @router.get("/suggestions", response_model=List[StudentResponse])
 def get_suggestions(
     skill: Optional[str] = Query(None, description="Filtro opcional por tag o habilidad"),
+    search: Optional[str] = Query(None, description="Filtro opcional por nombre o usuario"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -477,10 +553,9 @@ def get_suggestions(
             excluded_ids.append(invite.student_id)
 
     # 2. Filtrar alumnos sin equipo (ALUMNO)
-    from ..models import Role
+    from models.models import Role
     
     filters = [
-        User.team_id == None,
         Role.name == "ALUMNO",
         User.universityId == current_user.universityId,
         User.careerId == current_user.careerId,
@@ -488,18 +563,55 @@ def get_suggestions(
         ~User.id.in_(excluded_ids)
     ]
     
-    # ML Feature: Si el usuario ya fue agrupado por K-Means, sugerir a los grupos opuestos/complementarios
-    if current_user.cluster_id is not None:
-        filters.append(User.cluster_id != current_user.cluster_id)
+    if search:
+        filters.append(
+            or_(
+                User.full_name.ilike(f"%{search}%"),
+                User.username.ilike(f"%{search}%")
+            )
+        )
+    
+    # ML Feature: Penalizamos a los del mismo cluster en la etapa de puntuación en lugar de excluirlos
+    # Así, los amigos (del mismo cluster) seguirán apareciendo en la lista general.
+    # Eliminamos el hard filter de cluster_id aquí.
         
     query = db.query(User).join(Role, User.roleId == Role.id).filter(*filters)
 
-    students = query.all()
+    all_students = query.all()
+
+    # Filtrar eficientemente estudiantes cuyo equipo ya está lleno
+    # Contamos cuántos miembros hay por cada equipo
+    from sqlalchemy import func
+    team_sizes = db.query(User.team_id, func.count(User.id)).filter(User.team_id != None).group_by(User.team_id).all()
+    team_size_map = {t_id: count for t_id, count in team_sizes}
+    
+    # Obtenemos el max_members de los equipos
+    teams = db.query(Team).all()
+    team_max_map = {t.id: t.max_members for t in teams}
+
+    students = []
+    for s in all_students:
+        if s.team_id:
+            current_size = team_size_map.get(s.team_id, 0)
+            max_size = team_max_map.get(s.team_id, 3)
+            if current_size >= max_size:
+                continue # Saltar estudiante si su equipo ya está lleno
+        students.append(s)
     
     # 3. Minería de datos: Recomendar equipos Full Stack
     # Obtenemos las habilidades del usuario actual
     my_skills_db = db.query(UserSkill).filter(UserSkill.userId == current_user.id).all()
     my_skill_ids = {us.skillId for us in my_skills_db}
+    my_tags = [db.query(Skill).filter(Skill.id == sid).first().name for sid in my_skill_ids if db.query(Skill).filter(Skill.id == sid).first()]
+
+    # Definimos habilidades core de un equipo de desarrollo (Full Stack / Tech)
+    tech_keywords = {
+        'react', 'angular', 'vue', 'html', 'css', 'javascript', 'typescript', 'frontend', 'front',
+        'node', 'python', 'java', 'go', 'php', 'c#', 'sql', 'mysql', 'postgres', 'mongodb', 'backend', 'back', 'api',
+        'docker', 'aws', 'cloud', 'devops', 'git', 'linux',
+        'flutter', 'mobile', 'android', 'ios', 'kotlin', 'swift',
+        'ui', 'ux', 'diseño', 'figma', 'machine learning', 'ai', 'datos', 'data', 'full stack', 'fullstack'
+    }
 
     # Calculamos el score de complementariedad para cada estudiante
     student_scores = []
@@ -508,13 +620,28 @@ def get_suggestions(
         s_skill_ids = {us.skillId for us in s_skills}
         s_tags = [db.query(Skill).filter(Skill.id == sid).first().name for sid in s_skill_ids if db.query(Skill).filter(Skill.id == sid).first()]
         
-        # Filtro opcional
-        if skill and not any(skill.lower() in t.lower() for t in s_tags):
+        # Filtro opcional por skill
+        if skill and skill.lower() != 'all skills' and not any(skill.lower() in t.lower() for t in s_tags):
             continue
             
-        # Distancia/Complementariedad: Cuantas habilidades tiene el estudiante que yo NO tengo
-        complementary_skills = s_skill_ids - my_skill_ids
-        score = len(complementary_skills)
+        # Puntuación Inteligente (Full Stack Oriented)
+        score = 0
+        for tag in s_tags:
+            # ¿El estudiante tiene esta habilidad y YO NO? (Complementario)
+            if not any(tag.lower() == my_tag.lower() for my_tag in my_tags):
+                is_tech = any(kw in tag.lower() for kw in tech_keywords)
+                if is_tech:
+                    score += 5.0 # Alto valor a habilidades Tech complementarias
+                else:
+                    score += 0.5 # Poco valor a habilidades raras/random
+            else:
+                # Si tenemos la misma habilidad, sumamos un poco por afinidad
+                score += 1.0
+
+        # ML Feature: Si están en el mismo cluster, los penalizamos en puntaje para que 
+        # las sugerencias opuestas queden arriba, pero los amigos sigan apareciendo abajo.
+        if current_user.cluster_id is not None and s.cluster_id == current_user.cluster_id:
+            score -= 20.0
         
         student_scores.append((score, s, s_tags))
 
@@ -549,7 +676,7 @@ def get_student_directory(
     Directorio de alumnos con filtro estricto por universidad, carrera y cuatrimestre.
     Se excluyen alumnos que ya tienen equipo y al propio usuario.
     """
-    from ..models import Role, UserSkill
+    from models.models import Role, UserSkill
     
     query = db.query(User).join(Role, User.roleId == Role.id).filter(
         User.team_id == None,
