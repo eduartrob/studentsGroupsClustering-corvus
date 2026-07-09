@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import Column, String, Integer, Boolean, ForeignKey, DateTime, TEXT, ARRAY, Float
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-from .database import Base
+from core.database import Base
 
 class User(Base):
     __tablename__ = "users"
@@ -24,6 +24,11 @@ class User(Base):
     tags = Column(ARRAY(String), default=[])
     is_verified = Column(Boolean, default=False)
     
+    universityId = Column(UUID(as_uuid=True), ForeignKey("universities.id", ondelete="SET NULL"), nullable=True)
+    careerId = Column(UUID(as_uuid=True), ForeignKey("careers.id", ondelete="SET NULL"), nullable=True)
+    semester = Column(String(255), nullable=True)
+    cluster_id = Column(Integer, nullable=True)
+    
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -31,6 +36,19 @@ class User(Base):
     team = relationship("Team", back_populates="members", foreign_keys=[team_id])
     requests = relationship("TeamRequest", back_populates="student", cascade="all, delete-orphan")
     role = relationship("Role")
+    university = relationship("University")
+    career = relationship("Career")
+
+class University(Base):
+    __tablename__ = "universities"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(255), unique=True, nullable=False)
+
+class Career(Base):
+    __tablename__ = "careers"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(255), unique=True, nullable=False)
+
 
 class Role(Base):
     __tablename__ = "roles"
@@ -48,6 +66,7 @@ class Team(Base):
     project_title = Column(String(255), default="Sistema de gestión de equipos")
     project_description = Column(TEXT, default="Herramienta colaborativa para conectar estudiantes y optimizar la asignación de proyectos académicos.")
     max_members = Column(Integer, default=3)
+    admin_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -133,3 +152,20 @@ class StudentSkill(Base):
     evidence_courses = Column(ARRAY(String), default=[])
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class Skill(Base):
+    __tablename__ = "skills"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(255), unique=True, nullable=False)
+
+
+class UserSkill(Base):
+    __tablename__ = "user_skills"
+
+    userId = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    skillId = Column(UUID(as_uuid=True), ForeignKey("skills.id", ondelete="CASCADE"), primary_key=True)
+    
+    # Relaciones (opcionales)
+    user = relationship("User", backref="user_skills")
+    skill = relationship("Skill")
