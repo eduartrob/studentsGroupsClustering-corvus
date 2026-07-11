@@ -553,12 +553,21 @@ def get_suggestions(
             excluded_ids.append(invite.student_id)
 
     # 2. Filtrar alumnos sin equipo (ALUMNO)
-    from models.models import Role
+    from models.models import Role, Career
     
+    # Lógica para agrupar carreras similares (ej. "ingeniería en software" y "ingeniería en desarrollo de software")
+    current_career = db.query(Career).filter(Career.id == current_user.careerId).first()
+    if current_career and "SOFTWARE" in current_career.name.upper():
+        similar_careers = db.query(Career.id).filter(Career.name.ilike("%SOFTWARE%")).all()
+        career_ids = [c[0] for c in similar_careers]
+        career_filter = User.careerId.in_(career_ids)
+    else:
+        career_filter = User.careerId == current_user.careerId
+        
     filters = [
         Role.name == "ALUMNO",
         User.universityId == current_user.universityId,
-        User.careerId == current_user.careerId,
+        career_filter,
         User.semester == current_user.semester,
         ~User.id.in_(excluded_ids)
     ]

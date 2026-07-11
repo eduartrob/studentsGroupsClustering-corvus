@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS teams (
     project_title VARCHAR(255) DEFAULT 'Sistema de gestión de equipos',
     project_description TEXT DEFAULT 'Herramienta colaborativa para conectar estudiantes y optimizar la asignación de proyectos académicos.',
     max_members INT DEFAULT 3,
+    admin_id UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
