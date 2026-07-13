@@ -427,16 +427,24 @@ def accept_request(
     """
     Permite al estudiante receptor aceptar la invitación de integración a un equipo.
     """
-    request = db.query(TeamRequest).filter(
-        TeamRequest.id == requestId,
-        TeamRequest.state == "PENDIENTE"
+    # Primero buscar la solicitud sin filtrar por estado para dar mejor error
+    raw_request = db.query(TeamRequest).filter(
+        TeamRequest.id == requestId
     ).first()
     
-    if not request:
+    if not raw_request:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="La invitación no existe o ya no está pendiente."
+            detail="La invitación no existe. Puede que haya sido cancelada o que el ID sea incorrecto."
         )
+    
+    if raw_request.state != "PENDIENTE":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Esta invitación ya fue procesada (estado actual: {raw_request.state})."
+        )
+    
+    request = raw_request
 
     # Asegurar que sea el estudiante correcto quien acepta
     if request.student_id != current_user.id:
@@ -562,19 +570,38 @@ def get_suggestions(
 ):
     # 1. Obtener los IDs excluidos
     excluded_ids = [current_user.id]
+    
+    # Excluir a cualquiera a quien YO (mi equipo) le haya mandado solicitud
     if current_user.team_id:
-        # Excluir a cualquiera a quien ya le hayamos mandado solicitud (sin importar el estado, para evitar que salgan inmediatamente si rechazaron)
         all_team_invites = db.query(TeamRequest).filter(
             TeamRequest.team_id == current_user.team_id
         ).all()
         for invite in all_team_invites:
-            excluded_ids.append(invite.student_id)
+            if invite.student_id not in excluded_ids:
+                excluded_ids.append(invite.student_id)
             
         # Excluir también a los que YA ESTÁN en mi equipo
         team_members = db.query(User.id).filter(User.team_id == current_user.team_id).all()
         for member in team_members:
             if member[0] not in excluded_ids:
                 excluded_ids.append(member[0])
+
+    # Excluir también a los admins de equipos que ME hayan invitado a MÍ
+    # (si alguien ya te mandó invitación, no debe seguir saliendo en tus sugerencias)
+    incoming_requests = db.query(TeamRequest).filter(
+        TeamRequest.student_id == current_user.id,
+        TeamRequest.state == "PENDIENTE"
+    ).all()
+    for incoming in incoming_requests:
+        # Excluir al admin del equipo que me invitó
+        team_that_invited = db.query(Team).filter(Team.id == incoming.team_id).first()
+        if team_that_invited and team_that_invited.admin_id not in excluded_ids:
+            excluded_ids.append(team_that_invited.admin_id)
+        # Excluir también a todos los miembros de ese equipo
+        members_of_inviting_team = db.query(User.id).filter(User.team_id == incoming.team_id).all()
+        for m in members_of_inviting_team:
+            if m[0] not in excluded_ids:
+                excluded_ids.append(m[0])
 
     # 2. Filtrar alumnos sin equipo (ALUMNO)
     from models.models import Role, Career
