@@ -85,30 +85,39 @@ def update_my_team(
 ):
     """
     Actualiza el nombre, descripción y enlaces sociales del equipo actual del usuario.
+    Si el usuario no tiene equipo, lo crea automáticamente.
     """
     if not current_user.team_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No perteneces a ningún equipo, por lo que no puedes editar sus datos."
+        # Autocrear equipo si no tiene uno
+        new_team = Team(
+            name=update_data.name,
+            description=update_data.description,
+            admin_id=current_user.id
         )
+        db.add(new_team)
+        db.commit()
+        db.refresh(new_team)
+        current_user.team_id = new_team.id
+        db.commit()
+        team = new_team
+    else:
+        team = db.query(Team).filter(Team.id == current_user.team_id).first()
+        if not team:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="El equipo no existe."
+            )
 
-    team = db.query(Team).filter(Team.id == current_user.team_id).first()
-    if not team:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="El equipo no existe."
-        )
+        if team.admin_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Solo el administrador del equipo puede modificar esta configuración."
+            )
 
-    if team.admin_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo el administrador del equipo puede modificar esta configuración."
-        )
-
-    # Actualizar datos básicos
-    team.name = update_data.name
-    team.description = update_data.description
-    team.updated_at = datetime.utcnow()
+        # Actualizar datos básicos
+        team.name = update_data.name
+        team.description = update_data.description
+        team.updated_at = datetime.utcnow()
 
     # Reemplazar enlaces de redes sociales (eliminar antiguos y agregar nuevos)
     db.query(TeamSocialLink).filter(TeamSocialLink.team_id == team.id).delete()
@@ -349,7 +358,12 @@ def invite_student(
             user_id=str(student.id),
             title="Nueva invitación de equipo",
             body=f"{current_user.full_name or current_user.username} te ha invitado a su equipo.",
-            data={"type": "TEAM_INVITE", "requestId": str(new_request.id)}
+            data={
+                "type": "TEAM_INVITE", 
+                "requestId": str(new_request.id),
+                "authorName": current_user.full_name or current_user.username,
+                "authorPhotoUrl": current_user.profile_picture
+            }
         ))
     except Exception as e:
         print(f"Error sending push notification: {e}")
@@ -521,7 +535,11 @@ def accept_request(
             user_id=str(user_to_notify_id),
             title=notification_title,
             body=notification_body,
-            data={"type": "team_accept"}
+            data={
+                "type": "team_accept",
+                "authorName": current_user.full_name or current_user.username,
+                "authorPhotoUrl": current_user.profile_picture
+            }
         ))
     except Exception as e:
         print(f"Error publishing accept notification: {e}")
@@ -545,12 +563,18 @@ def get_suggestions(
     # 1. Obtener los IDs excluidos
     excluded_ids = [current_user.id]
     if current_user.team_id:
-        pending_invites = db.query(TeamRequest).filter(
-            TeamRequest.team_id == current_user.team_id,
-            TeamRequest.state == "PENDIENTE"
+        # Excluir a cualquiera a quien ya le hayamos mandado solicitud (sin importar el estado, para evitar que salgan inmediatamente si rechazaron)
+        all_team_invites = db.query(TeamRequest).filter(
+            TeamRequest.team_id == current_user.team_id
         ).all()
-        for invite in pending_invites:
+        for invite in all_team_invites:
             excluded_ids.append(invite.student_id)
+            
+        # Excluir también a los que YA ESTÁN en mi equipo
+        team_members = db.query(User.id).filter(User.team_id == current_user.team_id).all()
+        for member in team_members:
+            if member[0] not in excluded_ids:
+                excluded_ids.append(member[0])
 
     # 2. Filtrar alumnos sin equipo (ALUMNO)
     from models.models import Role, Career
@@ -598,9 +622,20 @@ def get_suggestions(
     teams = db.query(Team).all()
     team_max_map = {t.id: t.max_members for t in teams}
 
+    # Convertimos los excluded_ids a string para una comprobación robusta en Python
+    excluded_ids_str = {str(eid) for eid in excluded_ids}
+
     students = []
     for s in all_students:
+        # Validación extra de seguridad: no incluir a nadie que esté en excluded_ids
+        if str(s.id) in excluded_ids_str:
+            continue
+            
         if s.team_id:
+            # Validacion extra: si está en MI equipo, omitir (aunque ya debió filtrarse arriba)
+            if current_user.team_id and str(s.team_id) == str(current_user.team_id):
+                continue
+                
             current_size = team_size_map.get(s.team_id, 0)
             max_size = team_max_map.get(s.team_id, 3)
             if current_size >= max_size:
