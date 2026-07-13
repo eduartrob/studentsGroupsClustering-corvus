@@ -256,8 +256,14 @@ def get_requests(
         # Si la envié yo, quiero ver a quién se la envié (r.student).
         # Si la recibí yo, quiero ver quién me la envió (el admin del equipo emisor).
         if filter == "recibidas":
-            team_admin = db.query(User).filter(User.id == r.team.admin_id).first()
-            target_user = team_admin if team_admin else r.student
+            # Consulta directa al equipo por team_id para evitar problemas de
+            # lazy loading donde r.team puede ser None en ciertos contextos de sesión
+            sender_team = db.query(Team).filter(Team.id == r.team_id).first()
+            if sender_team:
+                team_admin = db.query(User).filter(User.id == sender_team.admin_id).first()
+                target_user = team_admin if team_admin else r.student
+            else:
+                target_user = r.student
         else:
             target_user = r.student
 
