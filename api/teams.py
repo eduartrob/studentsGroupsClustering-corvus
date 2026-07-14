@@ -85,30 +85,39 @@ def update_my_team(
 ):
     """
     Actualiza el nombre, descripción y enlaces sociales del equipo actual del usuario.
+    Si el usuario no tiene equipo, lo crea automáticamente.
     """
     if not current_user.team_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No perteneces a ningún equipo, por lo que no puedes editar sus datos."
+        # Autocrear equipo si no tiene uno
+        new_team = Team(
+            name=update_data.name,
+            description=update_data.description,
+            admin_id=current_user.id
         )
+        db.add(new_team)
+        db.commit()
+        db.refresh(new_team)
+        current_user.team_id = new_team.id
+        db.commit()
+        team = new_team
+    else:
+        team = db.query(Team).filter(Team.id == current_user.team_id).first()
+        if not team:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="El equipo no existe."
+            )
 
-    team = db.query(Team).filter(Team.id == current_user.team_id).first()
-    if not team:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="El equipo no existe."
-        )
+        if team.admin_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Solo el administrador del equipo puede modificar esta configuración."
+            )
 
-    if team.admin_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo el administrador del equipo puede modificar esta configuración."
-        )
-
-    # Actualizar datos básicos
-    team.name = update_data.name
-    team.description = update_data.description
-    team.updated_at = datetime.utcnow()
+        # Actualizar datos básicos
+        team.name = update_data.name
+        team.description = update_data.description
+        team.updated_at = datetime.utcnow()
 
     # Reemplazar enlaces de redes sociales (eliminar antiguos y agregar nuevos)
     db.query(TeamSocialLink).filter(TeamSocialLink.team_id == team.id).delete()
@@ -247,8 +256,14 @@ def get_requests(
         # Si la envié yo, quiero ver a quién se la envié (r.student).
         # Si la recibí yo, quiero ver quién me la envió (el admin del equipo emisor).
         if filter == "recibidas":
-            team_admin = db.query(User).filter(User.id == r.team.admin_id).first()
-            target_user = team_admin if team_admin else r.student
+            # Consulta directa al equipo por team_id para evitar problemas de
+            # lazy loading donde r.team puede ser None en ciertos contextos de sesión
+            sender_team = db.query(Team).filter(Team.id == r.team_id).first()
+            if sender_team:
+                team_admin = db.query(User).filter(User.id == sender_team.admin_id).first()
+                target_user = team_admin if team_admin else r.student
+            else:
+                target_user = r.student
         else:
             target_user = r.student
 
@@ -349,7 +364,12 @@ def invite_student(
             user_id=str(student.id),
             title="Nueva invitación de equipo",
             body=f"{current_user.full_name or current_user.username} te ha invitado a su equipo.",
-            data={"type": "TEAM_INVITE", "requestId": str(new_request.id)}
+            data={
+                "type": "TEAM_INVITE", 
+                "requestId": str(new_request.id),
+                "authorName": current_user.full_name or current_user.username,
+                "authorPhotoUrl": current_user.profile_picture
+            }
         ))
     except Exception as e:
         print(f"Error sending push notification: {e}")
@@ -413,16 +433,24 @@ def accept_request(
     """
     Permite al estudiante receptor aceptar la invitación de integración a un equipo.
     """
-    request = db.query(TeamRequest).filter(
-        TeamRequest.id == requestId,
-        TeamRequest.state == "PENDIENTE"
+    # Primero buscar la solicitud sin filtrar por estado para dar mejor error
+    raw_request = db.query(TeamRequest).filter(
+        TeamRequest.id == requestId
     ).first()
     
-    if not request:
+    if not raw_request:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="La invitación no existe o ya no está pendiente."
+            detail="La invitación no existe. Puede que haya sido cancelada o que el ID sea incorrecto."
         )
+    
+    if raw_request.state != "PENDIENTE":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Esta invitación ya fue procesada (estado actual: {raw_request.state})."
+        )
+    
+    request = raw_request
 
     # Asegurar que sea el estudiante correcto quien acepta
     if request.student_id != current_user.id:
@@ -521,7 +549,11 @@ def accept_request(
             user_id=str(user_to_notify_id),
             title=notification_title,
             body=notification_body,
-            data={"type": "team_accept"}
+            data={
+                "type": "team_accept",
+                "authorName": current_user.full_name or current_user.username,
+                "authorPhotoUrl": current_user.profile_picture
+            }
         ))
     except Exception as e:
         print(f"Error publishing accept notification: {e}")
@@ -539,26 +571,61 @@ def accept_request(
 def get_suggestions(
     skill: Optional[str] = Query(None, description="Filtro opcional por tag o habilidad"),
     search: Optional[str] = Query(None, description="Filtro opcional por nombre o usuario"),
+    show_all: bool = Query(False, description="Si es True, ignora el modelo de clustering y muestra a todos"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     # 1. Obtener los IDs excluidos
     excluded_ids = [current_user.id]
+    
+    # Excluir a cualquiera a quien YO (mi equipo) le haya mandado solicitud
     if current_user.team_id:
-        pending_invites = db.query(TeamRequest).filter(
-            TeamRequest.team_id == current_user.team_id,
-            TeamRequest.state == "PENDIENTE"
+        all_team_invites = db.query(TeamRequest).filter(
+            TeamRequest.team_id == current_user.team_id
         ).all()
-        for invite in pending_invites:
-            excluded_ids.append(invite.student_id)
+        for invite in all_team_invites:
+            if invite.student_id not in excluded_ids:
+                excluded_ids.append(invite.student_id)
+            
+        # Excluir también a los que YA ESTÁN en mi equipo
+        team_members = db.query(User.id).filter(User.team_id == current_user.team_id).all()
+        for member in team_members:
+            if member[0] not in excluded_ids:
+                excluded_ids.append(member[0])
+
+    # Excluir también a los admins de equipos que ME hayan invitado a MÍ
+    # (si alguien ya te mandó invitación, no debe seguir saliendo en tus sugerencias)
+    incoming_requests = db.query(TeamRequest).filter(
+        TeamRequest.student_id == current_user.id,
+        TeamRequest.state == "PENDIENTE"
+    ).all()
+    for incoming in incoming_requests:
+        # Excluir al admin del equipo que me invitó
+        team_that_invited = db.query(Team).filter(Team.id == incoming.team_id).first()
+        if team_that_invited and team_that_invited.admin_id not in excluded_ids:
+            excluded_ids.append(team_that_invited.admin_id)
+        # Excluir también a todos los miembros de ese equipo
+        members_of_inviting_team = db.query(User.id).filter(User.team_id == incoming.team_id).all()
+        for m in members_of_inviting_team:
+            if m[0] not in excluded_ids:
+                excluded_ids.append(m[0])
 
     # 2. Filtrar alumnos sin equipo (ALUMNO)
-    from models.models import Role
+    from models.models import Role, Career
     
+    # Lógica para agrupar carreras similares (ej. "ingeniería en software" y "ingeniería en desarrollo de software")
+    current_career = db.query(Career).filter(Career.id == current_user.careerId).first()
+    if current_career and "SOFTWARE" in current_career.name.upper():
+        similar_careers = db.query(Career.id).filter(Career.name.ilike("%SOFTWARE%")).all()
+        career_ids = [c[0] for c in similar_careers]
+        career_filter = User.careerId.in_(career_ids)
+    else:
+        career_filter = User.careerId == current_user.careerId
+        
     filters = [
         Role.name == "ALUMNO",
         User.universityId == current_user.universityId,
-        User.careerId == current_user.careerId,
+        career_filter,
         User.semester == current_user.semester,
         ~User.id.in_(excluded_ids)
     ]
@@ -589,9 +656,20 @@ def get_suggestions(
     teams = db.query(Team).all()
     team_max_map = {t.id: t.max_members for t in teams}
 
+    # Convertimos los excluded_ids a string para una comprobación robusta en Python
+    excluded_ids_str = {str(eid) for eid in excluded_ids}
+
     students = []
     for s in all_students:
+        # Validación extra de seguridad: no incluir a nadie que esté en excluded_ids
+        if str(s.id) in excluded_ids_str:
+            continue
+            
         if s.team_id:
+            # Validacion extra: si está en MI equipo, omitir (aunque ya debió filtrarse arriba)
+            if current_user.team_id and str(s.team_id) == str(current_user.team_id):
+                continue
+                
             current_size = team_size_map.get(s.team_id, 0)
             max_size = team_max_map.get(s.team_id, 3)
             if current_size >= max_size:
@@ -624,24 +702,25 @@ def get_suggestions(
         if skill and skill.lower() != 'all skills' and not any(skill.lower() in t.lower() for t in s_tags):
             continue
             
-        # Puntuación Inteligente (Full Stack Oriented)
         score = 0
-        for tag in s_tags:
-            # ¿El estudiante tiene esta habilidad y YO NO? (Complementario)
-            if not any(tag.lower() == my_tag.lower() for my_tag in my_tags):
-                is_tech = any(kw in tag.lower() for kw in tech_keywords)
-                if is_tech:
-                    score += 5.0 # Alto valor a habilidades Tech complementarias
+        if not show_all:
+            # Puntuación Inteligente (Full Stack Oriented)
+            for tag in s_tags:
+                # ¿El estudiante tiene esta habilidad y YO NO? (Complementario)
+                if not any(tag.lower() == my_tag.lower() for my_tag in my_tags):
+                    is_tech = any(kw in tag.lower() for kw in tech_keywords)
+                    if is_tech:
+                        score += 5.0 # Alto valor a habilidades Tech complementarias
+                    else:
+                        score += 0.5 # Poco valor a habilidades raras/random
                 else:
-                    score += 0.5 # Poco valor a habilidades raras/random
-            else:
-                # Si tenemos la misma habilidad, sumamos un poco por afinidad
-                score += 1.0
+                    # Si tenemos la misma habilidad, sumamos un poco por afinidad
+                    score += 1.0
 
-        # ML Feature: Si están en el mismo cluster, los penalizamos en puntaje para que 
-        # las sugerencias opuestas queden arriba, pero los amigos sigan apareciendo abajo.
-        if current_user.cluster_id is not None and s.cluster_id == current_user.cluster_id:
-            score -= 20.0
+            # ML Feature: Si están en el mismo cluster, los penalizamos en puntaje para que 
+            # las sugerencias opuestas queden arriba, pero los amigos sigan apareciendo abajo.
+            if current_user.cluster_id is not None and s.cluster_id == current_user.cluster_id:
+                score -= 20.0
         
         student_scores.append((score, s, s_tags))
 
@@ -713,3 +792,79 @@ def get_student_directory(
         )
         
     return response
+
+# =========================================================================
+# 5. PROFESOR: DIRECTORIO
+# =========================================================================
+
+@router.get("/prof/directory")
+def get_prof_directory(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Directorio de equipos y alumnos sin equipo para el dashboard del profesor.
+    Filtra por la carrera y universidad del profesor.
+    """
+    from models.schemas import ProfDirectoryResponse
+    from models.models import Role, UserSkill
+
+    if current_user.role.name not in ["PROFESOR", "DOCENTE"]:
+        raise HTTPException(status_code=403, detail="No autorizado")
+
+    # Alumnos de la misma carrera
+    students_query = db.query(User).join(Role, User.roleId == Role.id).filter(
+        Role.name == "ALUMNO",
+        User.careerId == current_user.careerId,
+        User.universityId == current_user.universityId
+    ).all()
+
+    teams_dict = {}
+    students_without_team = []
+
+    for s in students_query:
+        s_skills_db = db.query(UserSkill).filter(UserSkill.userId == s.id).all()
+        s_tags = [sk.skill.name for sk in s_skills_db if sk.skill]
+
+        if s.team_id:
+            if s.team_id not in teams_dict:
+                team = db.query(Team).filter(Team.id == s.team_id).first()
+                if team:
+                    social_links = db.query(TeamSocialLink).filter(TeamSocialLink.team_id == team.id).all()
+                    
+                    members = db.query(User).filter(User.team_id == team.id).all()
+                    members_response = [
+                        MemberResponse(
+                            id=m.id,
+                            name=m.full_name or m.username,
+                            email=m.email,
+                            avatarUrl=m.profile_picture,
+                            isMe=False
+                        ) for m in members
+                    ]
+                    
+                    teams_dict[s.team_id] = TeamResponse(
+                        id=team.id,
+                        name=team.name,
+                        description=team.description,
+                        project=ProjectResponse(title=team.project_title, description=team.project_description),
+                        memberCount=len(members),
+                        maxMembers=team.max_members,
+                        socialLinks=social_links,
+                        members=members_response
+                    )
+        else:
+            students_without_team.append(StudentResponse(
+                id=s.id,
+                name=s.full_name or s.username,
+                username=s.username,
+                bio=s.bio,
+                avatarUrl=s.profile_picture,
+                isVerified=s.is_verified,
+                tags=s_tags
+            ))
+
+    return {
+        "teams": list(teams_dict.values()),
+        "studentsWithoutTeam": students_without_team
+    }
