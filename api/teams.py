@@ -792,3 +792,79 @@ def get_student_directory(
         )
         
     return response
+
+# =========================================================================
+# 5. PROFESOR: DIRECTORIO
+# =========================================================================
+
+@router.get("/prof/directory")
+def get_prof_directory(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Directorio de equipos y alumnos sin equipo para el dashboard del profesor.
+    Filtra por la carrera y universidad del profesor.
+    """
+    from models.schemas import ProfDirectoryResponse
+    from models.models import Role, UserSkill
+
+    if current_user.role.name not in ["PROFESOR", "DOCENTE"]:
+        raise HTTPException(status_code=403, detail="No autorizado")
+
+    # Alumnos de la misma carrera
+    students_query = db.query(User).join(Role, User.roleId == Role.id).filter(
+        Role.name == "ALUMNO",
+        User.careerId == current_user.careerId,
+        User.universityId == current_user.universityId
+    ).all()
+
+    teams_dict = {}
+    students_without_team = []
+
+    for s in students_query:
+        s_skills_db = db.query(UserSkill).filter(UserSkill.userId == s.id).all()
+        s_tags = [sk.skill.name for sk in s_skills_db if sk.skill]
+
+        if s.team_id:
+            if s.team_id not in teams_dict:
+                team = db.query(Team).filter(Team.id == s.team_id).first()
+                if team:
+                    social_links = db.query(TeamSocialLink).filter(TeamSocialLink.team_id == team.id).all()
+                    
+                    members = db.query(User).filter(User.team_id == team.id).all()
+                    members_response = [
+                        MemberResponse(
+                            id=m.id,
+                            name=m.full_name or m.username,
+                            email=m.email,
+                            avatarUrl=m.profile_picture,
+                            isMe=False
+                        ) for m in members
+                    ]
+                    
+                    teams_dict[s.team_id] = TeamResponse(
+                        id=team.id,
+                        name=team.name,
+                        description=team.description,
+                        project=ProjectResponse(title=team.project_title, description=team.project_description),
+                        memberCount=len(members),
+                        maxMembers=team.max_members,
+                        socialLinks=social_links,
+                        members=members_response
+                    )
+        else:
+            students_without_team.append(StudentResponse(
+                id=s.id,
+                name=s.full_name or s.username,
+                username=s.username,
+                bio=s.bio,
+                avatarUrl=s.profile_picture,
+                isVerified=s.is_verified,
+                tags=s_tags
+            ))
+
+    return {
+        "teams": list(teams_dict.values()),
+        "studentsWithoutTeam": students_without_team
+    }
