@@ -69,7 +69,15 @@ async def process_profile_update(message: aio_pika.IncomingMessage):
                             User.semester == user.semester
                         ).all()
                         
-                        # 2. Formatear data
+                        # 2. Formatear data y Obtener Pesos de Habilidades
+                        from models.models import CareerSkill
+                        career_skills_db = db.query(CareerSkill).filter(CareerSkill.careerId == user.careerId).all()
+                        skill_weights = {}
+                        for cs in career_skills_db:
+                            sk = db.query(Skill).filter(Skill.id == cs.skillId).first()
+                            if sk:
+                                skill_weights[sk.name] = cs.weight
+
                         users_data = []
                         for a in alumnos:
                             # Obtener skills
@@ -78,9 +86,9 @@ async def process_profile_update(message: aio_pika.IncomingMessage):
                             a_skill_names = [db.query(Skill).filter(Skill.id == sid).first().name for sid in a_skill_ids if db.query(Skill).filter(Skill.id == sid).first()]
                             users_data.append({"id": a.id, "skills": a_skill_names})
                             
-                        # 3. Correr ML Clustering
+                        # 3. Correr ML Clustering con Pesos
                         from services.clustering_service import cluster_students_by_skills
-                        cluster_map = cluster_students_by_skills(users_data)
+                        cluster_map = cluster_students_by_skills(users_data, skill_weights)
                         
                         # 4. Actualizar base de datos
                         for a in alumnos:

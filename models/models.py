@@ -160,6 +160,18 @@ class Skill(Base):
     name = Column(String(255), unique=True, nullable=False)
 
 
+class CareerSkill(Base):
+    __tablename__ = "career_skills"
+
+    careerId = Column(UUID(as_uuid=True), ForeignKey("careers.id", ondelete="CASCADE"), primary_key=True)
+    skillId = Column(UUID(as_uuid=True), ForeignKey("skills.id", ondelete="CASCADE"), primary_key=True)
+    weight = Column(Integer, default=1)
+
+    # Relaciones (opcionales)
+    career = relationship("Career", backref="career_skills")
+    skill = relationship("Skill")
+
+
 class UserSkill(Base):
     __tablename__ = "user_skills"
 
