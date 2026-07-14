@@ -571,6 +571,7 @@ def accept_request(
 def get_suggestions(
     skill: Optional[str] = Query(None, description="Filtro opcional por tag o habilidad"),
     search: Optional[str] = Query(None, description="Filtro opcional por nombre o usuario"),
+    show_all: bool = Query(False, description="Si es True, ignora el modelo de clustering y muestra a todos"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -701,24 +702,25 @@ def get_suggestions(
         if skill and skill.lower() != 'all skills' and not any(skill.lower() in t.lower() for t in s_tags):
             continue
             
-        # Puntuación Inteligente (Full Stack Oriented)
         score = 0
-        for tag in s_tags:
-            # ¿El estudiante tiene esta habilidad y YO NO? (Complementario)
-            if not any(tag.lower() == my_tag.lower() for my_tag in my_tags):
-                is_tech = any(kw in tag.lower() for kw in tech_keywords)
-                if is_tech:
-                    score += 5.0 # Alto valor a habilidades Tech complementarias
+        if not show_all:
+            # Puntuación Inteligente (Full Stack Oriented)
+            for tag in s_tags:
+                # ¿El estudiante tiene esta habilidad y YO NO? (Complementario)
+                if not any(tag.lower() == my_tag.lower() for my_tag in my_tags):
+                    is_tech = any(kw in tag.lower() for kw in tech_keywords)
+                    if is_tech:
+                        score += 5.0 # Alto valor a habilidades Tech complementarias
+                    else:
+                        score += 0.5 # Poco valor a habilidades raras/random
                 else:
-                    score += 0.5 # Poco valor a habilidades raras/random
-            else:
-                # Si tenemos la misma habilidad, sumamos un poco por afinidad
-                score += 1.0
+                    # Si tenemos la misma habilidad, sumamos un poco por afinidad
+                    score += 1.0
 
-        # ML Feature: Si están en el mismo cluster, los penalizamos en puntaje para que 
-        # las sugerencias opuestas queden arriba, pero los amigos sigan apareciendo abajo.
-        if current_user.cluster_id is not None and s.cluster_id == current_user.cluster_id:
-            score -= 20.0
+            # ML Feature: Si están en el mismo cluster, los penalizamos en puntaje para que 
+            # las sugerencias opuestas queden arriba, pero los amigos sigan apareciendo abajo.
+            if current_user.cluster_id is not None and s.cluster_id == current_user.cluster_id:
+                score -= 20.0
         
         student_scores.append((score, s, s_tags))
 
