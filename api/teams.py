@@ -571,6 +571,7 @@ def accept_request(
 def get_suggestions(
     skill: Optional[str] = Query(None, description="Filtro opcional por tag o habilidad"),
     search: Optional[str] = Query(None, description="Filtro opcional por nombre o usuario"),
+    show_all: bool = Query(False, description="Si es True, ignora el modelo de clustering y muestra a todos"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -701,24 +702,25 @@ def get_suggestions(
         if skill and skill.lower() != 'all skills' and not any(skill.lower() in t.lower() for t in s_tags):
             continue
             
-        # Puntuación Inteligente (Full Stack Oriented)
         score = 0
-        for tag in s_tags:
-            # ¿El estudiante tiene esta habilidad y YO NO? (Complementario)
-            if not any(tag.lower() == my_tag.lower() for my_tag in my_tags):
-                is_tech = any(kw in tag.lower() for kw in tech_keywords)
-                if is_tech:
-                    score += 5.0 # Alto valor a habilidades Tech complementarias
+        if not show_all:
+            # Puntuación Inteligente (Full Stack Oriented)
+            for tag in s_tags:
+                # ¿El estudiante tiene esta habilidad y YO NO? (Complementario)
+                if not any(tag.lower() == my_tag.lower() for my_tag in my_tags):
+                    is_tech = any(kw in tag.lower() for kw in tech_keywords)
+                    if is_tech:
+                        score += 5.0 # Alto valor a habilidades Tech complementarias
+                    else:
+                        score += 0.5 # Poco valor a habilidades raras/random
                 else:
-                    score += 0.5 # Poco valor a habilidades raras/random
-            else:
-                # Si tenemos la misma habilidad, sumamos un poco por afinidad
-                score += 1.0
+                    # Si tenemos la misma habilidad, sumamos un poco por afinidad
+                    score += 1.0
 
-        # ML Feature: Si están en el mismo cluster, los penalizamos en puntaje para que 
-        # las sugerencias opuestas queden arriba, pero los amigos sigan apareciendo abajo.
-        if current_user.cluster_id is not None and s.cluster_id == current_user.cluster_id:
-            score -= 20.0
+            # ML Feature: Si están en el mismo cluster, los penalizamos en puntaje para que 
+            # las sugerencias opuestas queden arriba, pero los amigos sigan apareciendo abajo.
+            if current_user.cluster_id is not None and s.cluster_id == current_user.cluster_id:
+                score -= 20.0
         
         student_scores.append((score, s, s_tags))
 
@@ -790,3 +792,79 @@ def get_student_directory(
         )
         
     return response
+
+# =========================================================================
+# 5. PROFESOR: DIRECTORIO
+# =========================================================================
+
+@router.get("/prof/directory")
+def get_prof_directory(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Directorio de equipos y alumnos sin equipo para el dashboard del profesor.
+    Filtra por la carrera y universidad del profesor.
+    """
+    from models.schemas import ProfDirectoryResponse
+    from models.models import Role, UserSkill
+
+    if current_user.role.name not in ["PROFESOR", "DOCENTE"]:
+        raise HTTPException(status_code=403, detail="No autorizado")
+
+    # Alumnos de la misma carrera
+    students_query = db.query(User).join(Role, User.roleId == Role.id).filter(
+        Role.name == "ALUMNO",
+        User.careerId == current_user.careerId,
+        User.universityId == current_user.universityId
+    ).all()
+
+    teams_dict = {}
+    students_without_team = []
+
+    for s in students_query:
+        s_skills_db = db.query(UserSkill).filter(UserSkill.userId == s.id).all()
+        s_tags = [sk.skill.name for sk in s_skills_db if sk.skill]
+
+        if s.team_id:
+            if s.team_id not in teams_dict:
+                team = db.query(Team).filter(Team.id == s.team_id).first()
+                if team:
+                    social_links = db.query(TeamSocialLink).filter(TeamSocialLink.team_id == team.id).all()
+                    
+                    members = db.query(User).filter(User.team_id == team.id).all()
+                    members_response = [
+                        MemberResponse(
+                            id=m.id,
+                            name=m.full_name or m.username,
+                            email=m.email,
+                            avatarUrl=m.profile_picture,
+                            isMe=False
+                        ) for m in members
+                    ]
+                    
+                    teams_dict[s.team_id] = TeamResponse(
+                        id=team.id,
+                        name=team.name,
+                        description=team.description,
+                        project=ProjectResponse(title=team.project_title, description=team.project_description),
+                        memberCount=len(members),
+                        maxMembers=team.max_members,
+                        socialLinks=social_links,
+                        members=members_response
+                    )
+        else:
+            students_without_team.append(StudentResponse(
+                id=s.id,
+                name=s.full_name or s.username,
+                username=s.username,
+                bio=s.bio,
+                avatarUrl=s.profile_picture,
+                isVerified=s.is_verified,
+                tags=s_tags
+            ))
+
+    return {
+        "teams": list(teams_dict.values()),
+        "studentsWithoutTeam": students_without_team
+    }

@@ -93,3 +93,11 @@ class RequestResponse(BaseModel):
 # --- Creación de Solicitud ---
 class RequestCreate(BaseModel):
     studentId: UUID
+
+# --- Directorio de Profesores ---
+class ProfDirectoryResponse(BaseModel):
+    teams: List[TeamResponse]
+    studentsWithoutTeam: List[StudentResponse]
+
+    class Config:
+        orm_mode = True
