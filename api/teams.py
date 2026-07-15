@@ -6,7 +6,7 @@ from uuid import UUID
 from datetime import datetime
 
 from core.database import get_db
-from models.models import User, Team, TeamSocialLink, TeamRequest, UserSkill, Skill
+from models.models import User, Team, TeamMember, TeamSocialLink, TeamRequest, UserSkill, Skill
 from models.schemas import (
     TeamResponse, TeamUpdateRequest, ProjectResponse, MemberResponse,
     SocialLinkResponse, RequestResponse, RequestCreate, StudentResponse
@@ -826,13 +826,17 @@ def get_prof_directory(
         s_skills_db = db.query(UserSkill).filter(UserSkill.userId == s.id).all()
         s_tags = [sk.skill.name for sk in s_skills_db if sk.skill]
 
-        if s.team_id:
-            if s.team_id not in teams_dict:
-                team = db.query(Team).filter(Team.id == s.team_id).first()
+        user_team_member = db.query(TeamMember).filter(TeamMember.userId == s.id).first()
+        team_id = user_team_member.teamId if user_team_member else None
+
+        if team_id:
+            if team_id not in teams_dict:
+                team = db.query(Team).filter(Team.id == team_id).first()
                 if team:
                     social_links = db.query(TeamSocialLink).filter(TeamSocialLink.team_id == team.id).all()
                     
-                    members = db.query(User).filter(User.team_id == team.id).all()
+                    team_memberships = db.query(TeamMember).filter(TeamMember.teamId == team.id).all()
+                    members = [tm.user for tm in team_memberships if tm.user]
                     members_response = [
                         MemberResponse(
                             id=m.id,
@@ -843,13 +847,16 @@ def get_prof_directory(
                         ) for m in members
                     ]
                     
-                    teams_dict[s.team_id] = TeamResponse(
+                    teams_dict[team_id] = TeamResponse(
                         id=team.id,
-                        name=team.name,
-                        description=team.description,
-                        project=ProjectResponse(title=team.project_title, description=team.project_description),
+                        name=team.name or "Equipo Sin Nombre",
+                        description=team.project.description if (team.project and team.project.description) else "",
+                        project=ProjectResponse(
+                            title=team.project.name if team.project else "Sin Proyecto", 
+                            description=team.project.description if (team.project and team.project.description) else ""
+                        ),
                         memberCount=len(members),
-                        maxMembers=team.max_members,
+                        maxMembers=team.project.team_size if team.project else 4,
                         socialLinks=social_links,
                         members=members_response
                     )
