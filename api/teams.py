@@ -84,13 +84,13 @@ def get_my_team(
     return TeamResponse(
         id=team.id,
         name=team.name,
-        description=team.description,
+        description=team.project.description if team.project and team.project.description else "",
         project=ProjectResponse(
-            title=team.project_title,
-            description=team.project_description
+            title=team.project.name if team.project else "Sin Proyecto",
+            description=team.project.description if (team.project and team.project.description) else ""
         ),
         memberCount=len(members),
-        maxMembers=team.max_members,
+        maxMembers=team.project.team_size if team.project else 4,
         socialLinks=social_links,
         members=members_response
     )
@@ -124,7 +124,7 @@ def update_my_team(
 
         # Actualizar datos básicos
         team.name = update_data.name
-        team.description = update_data.description
+        # team.description = update_data.description  # Removing because Team no longer has description
         team.updated_at = datetime.utcnow()
 
     # Reemplazar enlaces de redes sociales (eliminar antiguos y agregar nuevos)
@@ -327,7 +327,7 @@ def invite_student(
 
     # 2. Validar que el equipo no esté lleno
     members_count = db.query(User).filter(User.id.in_(db.query(TeamMember.userId).filter(TeamMember.teamId == team.id))).count()
-    if members_count >= team.max_members:
+    if members_count >= (team.project.team_size if team.project else 4):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Tu equipo ya tiene el cupo máximo de integrantes."
@@ -485,7 +485,7 @@ def accept_request(
     if receiver_members_count > 1 and sender_members_count == 1:
         # El Emisor (Sender) se unirá al equipo del Receptor.
         # Validar si el equipo del Receptor tiene cupo para el Emisor
-        if receiver_members_count >= receiver_team.max_members:
+        if receiver_members_count >= (receiver_team.project.team_size if receiver_team.project else 4):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Tu equipo ya se encuentra lleno, por lo que esta persona no puede unirse a tu equipo."
@@ -511,7 +511,7 @@ def accept_request(
         
     else:
         # LÓGICA ORIGINAL: El Receptor se une al equipo del Emisor.
-        if sender_members_count >= sender_team.max_members:
+        if sender_members_count >= (sender_team.project.team_size if sender_team.project else 4):
             # Cancelar esta solicitud automáticamente
             request.state = "CANCELADA"
             db.commit()
