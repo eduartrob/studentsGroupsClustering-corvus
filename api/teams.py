@@ -656,12 +656,12 @@ def get_suggestions(
     # Filtrar eficientemente estudiantes cuyo equipo ya está lleno
     # Contamos cuántos miembros hay por cada equipo
     from sqlalchemy import func
-    team_sizes = db.query(TeamMember.teamId, func.count(TeamMember.userId)).filter(User.id.in_(db.query(TeamMember.userId))).group_by(User.team_id).all()
+    team_sizes = db.query(TeamMember.teamId, func.count(TeamMember.userId)).group_by(TeamMember.teamId).all()
     team_size_map = {t_id: count for t_id, count in team_sizes}
     
     # Obtenemos el max_members de los equipos
     teams = db.query(Team).all()
-    team_max_map = {t.id: t.max_members for t in teams}
+    team_max_map = {t.id: (t.project.team_size if t.project else 4) for t in teams}
 
     # Convertimos los excluded_ids a string para una comprobación robusta en Python
     excluded_ids_str = {str(eid) for eid in excluded_ids}
