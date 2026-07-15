@@ -13,6 +13,25 @@ from models.schemas import (
 )
 from core.auth import get_current_user
 
+
+def get_user_team_id(db, user_id):
+    tm = db.query(TeamMember).filter(TeamMember.userId == user_id).first()
+    return tm.teamId if tm else None
+
+def set_user_team_id(db, user_id, team_id, is_leader=False):
+    db.query(TeamMember).filter(TeamMember.userId == user_id).delete()
+    if team_id:
+        db.add(TeamMember(teamId=team_id, userId=user_id, is_leader=is_leader))
+    db.commit()
+
+def is_team_admin(db, team_id, user_id):
+    tm = db.query(TeamMember).filter(TeamMember.teamId == team_id, TeamMember.userId == user_id).first()
+    return tm.is_leader if tm else False
+
+def get_team_admin_id(db, team_id):
+    tm = db.query(TeamMember).filter(TeamMember.teamId == team_id, TeamMember.is_leader == True).first()
+    return tm.userId if tm else None
+
 router = APIRouter(prefix="/teams", tags=["Teams"])
 
 
@@ -45,7 +64,7 @@ def get_my_team(
     members = db.query(User).filter(User.id.in_(db.query(TeamMember.userId).filter(TeamMember.teamId == team.id))).all()
     
     # Ordenar para que el admin (admin_id) quede primero
-    members.sort(key=lambda m: 0 if m.id == team.admin_id else 1)
+    members.sort(key=lambda m: 0 if is_team_admin(db, team.id, m.id) else 1)
     
     members_response = []
     for m in members:
@@ -88,7 +107,7 @@ def update_my_team(
     Si el usuario no tiene equipo, lo crea automáticamente.
     """
     if not get_user_team_id(db, current_user.id):
-        raise HTTPException(status_code=400, detail="No puedes crear un equipo sin estar asignado a un proyecto.")
+        raise HTTPException(status_code=400, detail="No puedes crear un equipo sin estar asignado a un proyecto. Usa unirse a proyecto primero.")
     else:
         team = db.query(Team).filter(Team.id == get_user_team_id(db, current_user.id)).first()
         if not team:
@@ -97,7 +116,7 @@ def update_my_team(
                 detail="El equipo no existe."
             )
 
-        if team.admin_id != current_user.id:
+        if not is_team_admin(db, team.id, current_user.id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Solo el administrador del equipo puede modificar esta configuración."
@@ -144,11 +163,11 @@ def leave_team(
     
     # Check if the user was the admin
     team = db.query(Team).filter(Team.id == old_team_id).first()
-    if team and team.admin_id == current_user.id:
+    if team and is_team_admin(db, team.id, current_user.id):
         # User is the admin, need to assign new admin or delete team
         remaining_member = db.query(User).filter(User.id.in_(db.query(TeamMember.userId).filter(TeamMember.teamId == old_team_id))).first()
         if remaining_member:
-            team.admin_id = remaining_member.id
+            set_user_team_id(db, remaining_member.id, team.id, is_leader=True)
         else:
             db.delete(team)
 
@@ -173,7 +192,7 @@ def remove_member(
         )
 
     team = db.query(Team).filter(Team.id == get_user_team_id(db, current_user.id)).first()
-    if team and team.admin_id != current_user.id:
+    if team and not is_team_admin(db, team.id, current_user.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo el administrador puede expulsar integrantes."
@@ -186,7 +205,7 @@ def remove_member(
             detail="No puedes expulsarte a ti mismo del equipo. Usa /leave en su lugar."
         )
 
-    member = db.query(User).filter(User.id == memberId, User.team_id == get_user_team_id(db, current_user.id)).first()
+    member = db.query(User).filter(User.id == memberId, User.id.in_(db.query(TeamMember.userId).filter(TeamMember.teamId == get_user_team_id(db, current_user.id)))).first()
     if not member:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -249,7 +268,7 @@ def get_requests(
             # lazy loading donde r.team puede ser None en ciertos contextos de sesión
             sender_team = db.query(Team).filter(Team.id == r.team_id).first()
             if sender_team:
-                team_admin = db.query(User).filter(User.id == sender_team.admin_id).first()
+                team_admin = db.query(User).filter(User.id == get_team_admin_id(db, sender_team.id)).first()
                 target_user = team_admin if team_admin else r.student
             else:
                 target_user = r.student
@@ -297,7 +316,6 @@ def invite_student(
         new_team = Team(
             name=f"Equipo de {current_user.full_name or current_user.username}",
             description="Equipo creado automáticamente al enviar invitación.",
-            admin_id=current_user.id
         )
         db.add(new_team)
         db.commit()
@@ -474,7 +492,7 @@ def accept_request(
             )
 
         # El Emisor es el único miembro de su equipo (que es él mismo, el admin_id).
-        sender_user = db.query(User).filter(User.id == sender_team.admin_id).first()
+        sender_user = db.query(User).filter(User.id == get_team_admin_id(db, sender_team.id)).first()
         
         # El Emisor se une al equipo del Receptor
         set_user_team_id(db, sender_user.id, receiver_team.id)
@@ -505,10 +523,10 @@ def accept_request(
         # Si el Receptor tenía un equipo anterior, debe abandonarlo.
         if receiver_team_id and receiver_team_id != request.team_id:
             old_team = receiver_team
-            if old_team and old_team.admin_id == current_user.id:
+            if old_team and old_is_team_admin(db, team.id, current_user.id):
                 remaining_member = db.query(User).filter(User.id.in_(db.query(TeamMember.userId).filter(TeamMember.teamId == old_team.id)), User.id != current_user.id).first()
                 if remaining_member:
-                    old_team.admin_id = remaining_member.id
+                    old_set_user_team_id(db, remaining_member.id, team.id, is_leader=True)
                 else:
                     db.delete(old_team)
                     
@@ -517,7 +535,7 @@ def accept_request(
         request.state = "ACEPTADA"
         
         target_team_name = sender_team.name
-        user_to_notify_id = sender_team.admin_id
+        user_to_notify_id = get_team_admin_id(db, sender_team.id)
         notification_title = "¡Nuevo miembro en tu equipo!"
         notification_body = f"{current_user.full_name or current_user.username} ha aceptado tu invitación."
 
@@ -577,7 +595,7 @@ def get_suggestions(
                 excluded_ids.append(invite.student_id)
             
         # Excluir también a los que YA ESTÁN en mi equipo
-        team_members = db.query(User.id).filter(User.team_id == get_user_team_id(db, current_user.id)).all()
+        team_members = db.query(User.id).filter(User.id.in_(db.query(TeamMember.userId).filter(TeamMember.teamId == get_user_team_id(db, current_user.id)))).all()
         for member in team_members:
             if member[0] not in excluded_ids:
                 excluded_ids.append(member[0])
@@ -591,8 +609,8 @@ def get_suggestions(
     for incoming in incoming_requests:
         # Excluir al admin del equipo que me invitó
         team_that_invited = db.query(Team).filter(Team.id == incoming.team_id).first()
-        if team_that_invited and team_that_invited.admin_id not in excluded_ids:
-            excluded_ids.append(team_that_invited.admin_id)
+        if team_that_invited and get_team_admin_id(db, team_that_invited.id) not in excluded_ids:
+            excluded_ids.append(get_team_admin_id(db, team_that_invited.id))
         # Excluir también a todos los miembros de ese equipo
         members_of_inviting_team = db.query(User.id).filter(User.id.in_(db.query(TeamMember.userId).filter(TeamMember.teamId == incoming.team_id))).all()
         for m in members_of_inviting_team:
