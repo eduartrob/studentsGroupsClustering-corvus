@@ -78,6 +78,13 @@ class ProjectProfessor(Base):
     projectId = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True)
     userId = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
 
+class ProjectStudent(Base):
+    __tablename__ = "project_students"
+
+    projectId = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True)
+    userId = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class Team(Base):
     __tablename__ = "teams"
 

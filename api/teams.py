@@ -845,25 +845,34 @@ def get_student_directory(
 
 @router.get("/prof/directory")
 def get_prof_directory(
+    project_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Directorio de equipos y alumnos sin equipo para el dashboard del profesor.
-    Filtra por la carrera y universidad del profesor.
+    Filtra por el proyecto (clase) al que los alumnos se han unido.
     """
     from models.schemas import ProfDirectoryResponse
-    from models.models import Role, UserSkill
-
+    from models.models import Role, UserSkill, ProjectStudent
+    
     if current_user.role.name not in ["PROFESOR", "DOCENTE"]:
         raise HTTPException(status_code=403, detail="No autorizado")
+        
+    if not project_id:
+        raise HTTPException(status_code=400, detail="project_id es requerido")
 
-    # Alumnos de la misma carrera
-    students_query = db.query(User).join(Role, User.roleId == Role.id).filter(
-        Role.name == "ALUMNO",
-        User.careerId == current_user.careerId,
-        User.universityId == current_user.universityId
+    # Alumnos que se han registrado al proyecto
+    project_students_db = db.query(ProjectStudent).filter(
+        ProjectStudent.projectId == project_id
     ).all()
+    
+    student_ids = [ps.userId for ps in project_students_db]
+    
+    if not student_ids:
+        students_query = []
+    else:
+        students_query = db.query(User).filter(User.id.in_(student_ids)).all()
 
     teams_dict = {}
     students_without_team = []
@@ -872,7 +881,10 @@ def get_prof_directory(
         s_skills_db = db.query(UserSkill).filter(UserSkill.userId == s.id).all()
         s_tags = [sk.skill.name for sk in s_skills_db if sk.skill]
 
-        user_team_member = db.query(TeamMember).filter(TeamMember.userId == s.id).first()
+        user_team_member = db.query(TeamMember).join(Team).filter(
+            TeamMember.userId == s.id,
+            Team.projectId == project_id
+        ).first()
         team_id = user_team_member.teamId if user_team_member else None
 
         if team_id:
