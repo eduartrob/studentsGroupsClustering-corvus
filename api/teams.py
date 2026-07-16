@@ -637,6 +637,17 @@ def get_suggestions(
         ~User.id.in_(excluded_ids)
     ]
     
+    current_team_id = get_user_team_id(db, current_user.id)
+    if current_team_id:
+        current_team = db.query(Team).filter(Team.id == current_team_id).first()
+        if current_team and current_team.projectId:
+            project_filter = User.id.in_(
+                db.query(TeamMember.userId)
+                .join(Team, Team.id == TeamMember.teamId)
+                .filter(Team.projectId == current_team.projectId)
+            )
+            filters.append(project_filter)
+    
     if search:
         filters.append(
             or_(
@@ -764,19 +775,47 @@ def get_student_directory(
     """
     from models.models import Role, UserSkill
     
-    query = db.query(User).join(Role, User.roleId == Role.id).filter(
-        ~User.id.in_(db.query(TeamMember.userId)),
+    filters = [
         Role.name == "ALUMNO",
         User.id != current_user.id,
         User.universityId == current_user.universityId,
         User.careerId == current_user.careerId,
         User.semester == current_user.semester
-    )
+    ]
     
-    students = query.all()
+    current_team_id = get_user_team_id(db, current_user.id)
+    if current_team_id:
+        current_team = db.query(Team).filter(Team.id == current_team_id).first()
+        if current_team and current_team.projectId:
+            project_filter = User.id.in_(
+                db.query(TeamMember.userId)
+                .join(Team, Team.id == TeamMember.teamId)
+                .filter(Team.projectId == current_team.projectId)
+            )
+            filters.append(project_filter)
+            
+    query = db.query(User).join(Role, User.roleId == Role.id).filter(*filters)
+    
+    all_students = query.all()
+    
+    from sqlalchemy import func
+    team_sizes = db.query(TeamMember.teamId, func.count(TeamMember.userId)).group_by(TeamMember.teamId).all()
+    team_size_map = {t_id: count for t_id, count in team_sizes}
+    
+    teams = db.query(Team).all()
+    team_max_map = {t.id: (t.project.team_size if t.project else 4) for t in teams}
     
     response = []
-    for s in students:
+    for s in all_students:
+        if get_user_team_id(db, s.id):
+            if current_team_id and str(get_user_team_id(db, s.id)) == str(current_team_id):
+                continue
+                
+            current_size = team_size_map.get(get_user_team_id(db, s.id), 0)
+            max_size = team_max_map.get(get_user_team_id(db, s.id), 3)
+            if current_size >= max_size:
+                continue
+                
         s_skills_db = db.query(UserSkill).filter(UserSkill.userId == s.id).all()
         s_tags = [sk.skill.name for sk in s_skills_db if sk.skill]
         
