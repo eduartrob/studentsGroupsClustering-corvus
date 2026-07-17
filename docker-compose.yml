@@ -13,7 +13,7 @@ services:
       POSTGRES_PASSWORD: davity333
       POSTGRES_DB: corvus_auth_db
     ports:
-      - "5433:5432"  # Mapea el puerto 5433 de tu lap al 5432 interno del contenedor
+      - "5437:5432"  # Mapea el puerto 5437 de tu lap al 5432 interno del contenedor
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
