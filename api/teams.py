@@ -6,7 +6,7 @@ from uuid import UUID
 from datetime import datetime
 
 from core.database import get_db
-from models.models import User, Team, TeamMember, TeamSocialLink, TeamRequest, UserSkill, Skill
+from models.models import User, Team, TeamMember, TeamSocialLink, TeamRequest, UserSkill, Skill, ProjectStudent
 from models.schemas import (
     TeamResponse, TeamUpdateRequest, ProjectResponse, MemberResponse,
     SocialLinkResponse, RequestResponse, RequestCreate, StudentResponse
