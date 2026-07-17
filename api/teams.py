@@ -385,6 +385,7 @@ def invite_student(
             body=f"{current_user.full_name or current_user.username} te ha invitado a su equipo.",
             data={
                 "type": "TEAM_INVITE", 
+                "projectId": str(team.projectId),
                 "requestId": str(new_request.id),
                 "authorName": current_user.full_name or current_user.username,
                 "authorPhotoUrl": current_user.profile_picture
