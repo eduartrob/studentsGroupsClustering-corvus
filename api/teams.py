@@ -762,6 +762,10 @@ def get_suggestions(
 
     response = []
     for score, s, s_tags in top_students:
+        s_team_id = get_user_team_id(db, s.id)
+        s_team_size = team_size_map.get(s_team_id, 0) if s_team_id else 0
+        has_team = s_team_size > 1
+        
         response.append(
             StudentResponse(
                 id=s.id,
@@ -770,7 +774,8 @@ def get_suggestions(
                 bio=s.bio,
                 avatarUrl=s.profile_picture,
                 isVerified=s.is_verified,
-                tags=s_tags
+                tags=s_tags,
+                hasTeam=has_team
             )
         )
     return response
@@ -837,6 +842,10 @@ def get_student_directory(
             if not has_skill:
                 continue
 
+        s_team_id = get_user_team_id(db, s.id)
+        s_team_size = team_size_map.get(s_team_id, 0) if s_team_id else 0
+        has_team = s_team_size > 1
+
         response.append(
             StudentResponse(
                 id=s.id,
@@ -845,7 +854,8 @@ def get_student_directory(
                 bio=s.bio,
                 avatarUrl=s.profile_picture,
                 isVerified=s.is_verified,
-                tags=s_tags
+                tags=s_tags,
+                hasTeam=has_team
             )
         )
         

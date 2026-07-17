@@ -73,6 +73,7 @@ class StudentResponse(BaseModel):
     avatarUrl: Optional[str] = None
     isVerified: bool = False
     tags: List[str] = []
+    hasTeam: bool = False
 
     class Config:
         orm_mode = True
