@@ -107,7 +107,18 @@ def update_my_team(
     Si el usuario no tiene equipo, lo crea automáticamente.
     """
     if not get_user_team_id(db, current_user.id):
-        raise HTTPException(status_code=400, detail="No puedes crear un equipo sin estar asignado a un proyecto. Usa unirse a proyecto primero.")
+        project_student = db.query(ProjectStudent).filter(ProjectStudent.userId == current_user.id).first()
+        if not project_student:
+            raise HTTPException(status_code=400, detail="No puedes crear un equipo sin estar asignado a un proyecto. Usa unirse a proyecto primero.")
+        
+        team = Team(
+            name=update_data.name,
+            projectId=project_student.projectId,
+        )
+        db.add(team)
+        db.commit()
+        db.refresh(team)
+        set_user_team_id(db, current_user.id, team.id, is_leader=True)
     else:
         team = db.query(Team).filter(Team.id == get_user_team_id(db, current_user.id)).first()
         if not team:
@@ -311,17 +322,18 @@ def invite_student(
 
     # 1. Validar que el emisor pertenezca a un equipo
     if not get_user_team_id(db, current_user.id):
-        # Opcional: Podríamos autocrear el equipo aquí si no tiene uno.
-        # Por ahora creamos un equipo por defecto para el flujo
+        project_student = db.query(ProjectStudent).filter(ProjectStudent.userId == current_user.id).first()
+        if not project_student:
+            raise HTTPException(status_code=400, detail="No puedes enviar una invitación sin estar asignado a un proyecto. Usa unirse a proyecto primero.")
+            
         new_team = Team(
             name=f"Equipo de {current_user.full_name or current_user.username}",
-            description="Equipo creado automáticamente al enviar invitación.",
+            projectId=project_student.projectId,
         )
         db.add(new_team)
         db.commit()
         db.refresh(new_team)
         set_user_team_id(db, current_user.id, new_team.id, is_leader=True)
-        db.commit()
 
     team = db.query(Team).filter(Team.id == get_user_team_id(db, current_user.id)).first()
 
