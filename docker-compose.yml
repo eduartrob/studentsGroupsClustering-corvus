@@ -31,6 +31,7 @@ services:
       # Si quieres usar una base de datos que corre DIRECTO en tu lap (fuera de Docker),
       # cambia 'db' por 'host.docker.internal' y asegúrate de configurar extra_hosts abajo.
       - DATABASE_URL=postgresql://postgres:davity333@db:5432/corvus_auth_db
+      - RABBITMQ_URL=amqp://guest:guest@host.docker.internal:5672/
       - DEV_BYPASS=true
       - JWT_SECRET=super_secret_corvus_dev_key
       - JWT_ALGORITHM=HS256
