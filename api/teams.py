@@ -630,35 +630,19 @@ def get_suggestions(
                 excluded_ids.append(m[0])
 
     # 2. Filtrar alumnos sin equipo (ALUMNO)
-    from models.models import Role, Career
+    from models.models import Role, ProjectStudent
     
-    # Lógica para agrupar carreras similares (ej. "ingeniería en software" y "ingeniería en desarrollo de software")
-    current_career = db.query(Career).filter(Career.id == current_user.careerId).first()
-    if current_career and "SOFTWARE" in current_career.name.upper():
-        similar_careers = db.query(Career.id).filter(Career.name.ilike("%SOFTWARE%")).all()
-        career_ids = [c[0] for c in similar_careers]
-        career_filter = User.careerId.in_(career_ids)
-    else:
-        career_filter = User.careerId == current_user.careerId
-        
     filters = [
         Role.name == "ALUMNO",
-        User.universityId == current_user.universityId,
-        career_filter,
-        User.semester == current_user.semester,
         ~User.id.in_(excluded_ids)
     ]
     
-    current_team_id = get_user_team_id(db, current_user.id)
-    if current_team_id:
-        current_team = db.query(Team).filter(Team.id == current_team_id).first()
-        if current_team and current_team.projectId:
-            project_filter = User.id.in_(
-                db.query(TeamMember.userId)
-                .join(Team, Team.id == TeamMember.teamId)
-                .filter(Team.projectId == current_team.projectId)
-            )
-            filters.append(project_filter)
+    current_project_student = db.query(ProjectStudent).filter(ProjectStudent.userId == current_user.id).first()
+    if current_project_student:
+        project_filter = User.id.in_(
+            db.query(ProjectStudent.userId).filter(ProjectStudent.projectId == current_project_student.projectId)
+        )
+        filters.append(project_filter)
     
     if search:
         filters.append(
@@ -792,24 +776,19 @@ def get_student_directory(
     """
     from models.models import Role, UserSkill
     
+    from models.models import Role, ProjectStudent
+    
     filters = [
         Role.name == "ALUMNO",
-        User.id != current_user.id,
-        User.universityId == current_user.universityId,
-        User.careerId == current_user.careerId,
-        User.semester == current_user.semester
+        User.id != current_user.id
     ]
     
-    current_team_id = get_user_team_id(db, current_user.id)
-    if current_team_id:
-        current_team = db.query(Team).filter(Team.id == current_team_id).first()
-        if current_team and current_team.projectId:
-            project_filter = User.id.in_(
-                db.query(TeamMember.userId)
-                .join(Team, Team.id == TeamMember.teamId)
-                .filter(Team.projectId == current_team.projectId)
-            )
-            filters.append(project_filter)
+    current_project_student = db.query(ProjectStudent).filter(ProjectStudent.userId == current_user.id).first()
+    if current_project_student:
+        project_filter = User.id.in_(
+            db.query(ProjectStudent.userId).filter(ProjectStudent.projectId == current_project_student.projectId)
+        )
+        filters.append(project_filter)
             
     query = db.query(User).join(Role, User.roleId == Role.id).filter(*filters)
     
