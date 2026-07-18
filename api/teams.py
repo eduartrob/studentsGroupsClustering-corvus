@@ -14,12 +14,25 @@ from models.schemas import (
 from core.auth import get_current_user
 
 
-def get_user_team_id(db, user_id):
-    tm = db.query(TeamMember).filter(TeamMember.userId == user_id).first()
+def get_user_team_id(db, user_id, project_id=None):
+    """Devuelve el teamId del usuario. Si se pasa project_id, filtra por ese proyecto."""
+    query = db.query(TeamMember).join(Team, TeamMember.teamId == Team.id).filter(TeamMember.userId == user_id)
+    if project_id:
+        query = query.filter(Team.projectId == project_id)
+    tm = query.first()
     return tm.teamId if tm else None
 
-def set_user_team_id(db, user_id, team_id, is_leader=False):
-    db.query(TeamMember).filter(TeamMember.userId == user_id).delete()
+def set_user_team_id(db, user_id, team_id, is_leader=False, project_id=None):
+    """Elimina la membresía del usuario en el proyecto dado (o en cualquier equipo si no hay project_id) y crea la nueva."""
+    if project_id:
+        # Solo eliminar membresías del mismo proyecto
+        team_ids_in_project = db.query(Team.id).filter(Team.projectId == project_id).subquery()
+        db.query(TeamMember).filter(
+            TeamMember.userId == user_id,
+            TeamMember.teamId.in_(team_ids_in_project)
+        ).delete(synchronize_session=False)
+    else:
+        db.query(TeamMember).filter(TeamMember.userId == user_id).delete()
     if team_id:
         db.add(TeamMember(teamId=team_id, userId=user_id, is_leader=is_leader))
     db.commit()
@@ -42,26 +55,34 @@ def get_my_project_id(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    project_student = db.query(ProjectStudent).filter(ProjectStudent.userId == current_user.id).first()
-    if not project_student:
+    """Retorna todos los proyectos del usuario (puede estar en varios)."""
+    project_students = db.query(ProjectStudent).filter(ProjectStudent.userId == current_user.id).all()
+    if not project_students:
         raise HTTPException(status_code=404, detail="Usuario no asignado a ningún proyecto")
-    return {"projectId": project_student.projectId}
+    # Retorna el primero por compatibilidad, y la lista completa
+    return {
+        "projectId": project_students[0].projectId,
+        "projectIds": [str(ps.projectId) for ps in project_students]
+    }
 
 @router.get("/my-team", response_model=TeamResponse)
 def get_my_team(
+    project_id: Optional[str] = Query(None, description="ID del proyecto para filtrar el equipo"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Obtiene los detalles del equipo del usuario autenticado (integrantes, proyecto y redes).
+    Obtiene los detalles del equipo del usuario autenticado para un proyecto específico.
+    Si no se pasa project_id, busca en todos los proyectos (compatibilidad hacia atrás).
     """
-    if not get_user_team_id(db, current_user.id):
+    team_id = get_user_team_id(db, current_user.id, project_id=project_id)
+    if not team_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="El usuario no pertenece a ningún equipo en este momento."
+            detail="El usuario no pertenece a ningún equipo en este proyecto."
         )
 
-    team = db.query(Team).filter(Team.id == get_user_team_id(db, current_user.id)).first()
+    team = db.query(Team).filter(Team.id == team_id).first()
     if not team:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -108,28 +129,34 @@ def get_my_team(
 @router.put("/my-team", response_model=TeamResponse)
 def update_my_team(
     update_data: TeamUpdateRequest,
+    project_id: Optional[str] = Query(None, description="ID del proyecto al que pertenece el equipo"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Actualiza el nombre, descripción y enlaces sociales del equipo actual del usuario.
-    Si el usuario no tiene equipo, lo crea automáticamente.
+    Actualiza el nombre y enlaces sociales del equipo actual del usuario en ese proyecto.
+    Si el usuario no tiene equipo en ese proyecto, lo crea automáticamente.
     """
-    if not get_user_team_id(db, current_user.id):
-        project_student = db.query(ProjectStudent).filter(ProjectStudent.userId == current_user.id).first()
-        if not project_student:
-            raise HTTPException(status_code=400, detail="No puedes crear un equipo sin estar asignado a un proyecto. Usa unirse a proyecto primero.")
+    team_id = get_user_team_id(db, current_user.id, project_id=project_id)
+    if not team_id:
+        # Crear equipo nuevo para el proyecto correcto
+        resolved_project_id = project_id
+        if not resolved_project_id:
+            project_student = db.query(ProjectStudent).filter(ProjectStudent.userId == current_user.id).first()
+            if not project_student:
+                raise HTTPException(status_code=400, detail="No puedes crear un equipo sin estar asignado a un proyecto.")
+            resolved_project_id = project_student.projectId
         
         team = Team(
             name=update_data.name,
-            projectId=project_student.projectId,
+            projectId=resolved_project_id,
         )
         db.add(team)
         db.commit()
         db.refresh(team)
-        set_user_team_id(db, current_user.id, team.id, is_leader=True)
+        set_user_team_id(db, current_user.id, team.id, is_leader=True, project_id=str(resolved_project_id))
     else:
-        team = db.query(Team).filter(Team.id == get_user_team_id(db, current_user.id)).first()
+        team = db.query(Team).filter(Team.id == team_id).first()
         if not team:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -142,12 +169,10 @@ def update_my_team(
                 detail="Solo el administrador del equipo puede modificar esta configuración."
             )
 
-        # Actualizar datos básicos
         team.name = update_data.name
-        # team.description = update_data.description  # Removing because Team no longer has description
         team.updated_at = datetime.utcnow()
 
-    # Reemplazar enlaces de redes sociales (eliminar antiguos y agregar nuevos)
+    # Reemplazar enlaces de redes sociales
     db.query(TeamSocialLink).filter(TeamSocialLink.team_id == team.id).delete()
     for link_in in update_data.socialLinks:
         new_link = TeamSocialLink(
@@ -160,8 +185,7 @@ def update_my_team(
     db.commit()
     db.refresh(team)
 
-    # Retornar equipo actualizado
-    return get_my_team(current_user=current_user, db=db)
+    return get_my_team(project_id=project_id, current_user=current_user, db=db)
 
 
 @router.post("/my-team/leave")
@@ -246,6 +270,7 @@ def remove_member(
 @router.get("/requests", response_model=List[RequestResponse])
 def get_requests(
     filter: str = Query(..., description="Filtros válidos: 'recibidas' o 'enviadas'"),
+    project_id: Optional[str] = Query(None, description="ID del proyecto para filtrar solicitudes"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -255,23 +280,23 @@ def get_requests(
     query = db.query(TeamRequest)
 
     if filter == "enviadas":
-        if not get_user_team_id(db, current_user.id):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No perteneces a ningún equipo para consultar invitaciones enviadas."
-            )
-        # Mostrar solicitudes enviadas por este equipo
+        team_id = get_user_team_id(db, current_user.id, project_id=project_id)
+        if not team_id:
+            return []  # Sin equipo en este proyecto, no hay solicitudes enviadas
         requests = query.filter(
-            TeamRequest.team_id == get_user_team_id(db, current_user.id),
+            TeamRequest.team_id == team_id,
             TeamRequest.state == "PENDIENTE"
         ).all()
 
     elif filter == "recibidas":
-        # Mostrar solicitudes PENDIENTES donde el usuario sea el destino
-        requests = query.filter(
+        # Filtrar solicitudes donde yo sea el destino, y el equipo emisor sea del proyecto correcto
+        incoming = query.filter(
             TeamRequest.student_id == current_user.id,
             TeamRequest.state == "PENDIENTE"
-        ).all()
+        )
+        if project_id:
+            incoming = incoming.join(Team, TeamRequest.team_id == Team.id).filter(Team.projectId == project_id)
+        requests = incoming.all()
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -317,11 +342,12 @@ def get_requests(
 @router.post("/requests", response_model=RequestResponse, status_code=status.HTTP_201_CREATED)
 def invite_student(
     body: RequestCreate,
+    project_id: Optional[str] = Query(None, description="ID del proyecto en el que se realiza la invitación"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Envía una invitación a un alumno candidato.
+    Envía una invitación a un alumno candidato dentro de un proyecto específico.
     """
     if body.studentId == current_user.id:
         raise HTTPException(
@@ -329,22 +355,36 @@ def invite_student(
             detail="No puedes enviarte una invitación a ti mismo."
         )
 
-    # 1. Validar que el emisor pertenezca a un equipo
-    if not get_user_team_id(db, current_user.id):
-        project_student = db.query(ProjectStudent).filter(ProjectStudent.userId == current_user.id).first()
-        if not project_student:
-            raise HTTPException(status_code=400, detail="No puedes enviar una invitación sin estar asignado a un proyecto. Usa unirse a proyecto primero.")
-            
+    # Resolver el proyecto correcto
+    resolved_project_id = project_id
+    if not resolved_project_id:
+        ps = db.query(ProjectStudent).filter(ProjectStudent.userId == current_user.id).first()
+        if not ps:
+            raise HTTPException(status_code=400, detail="No estás asignado a ningún proyecto.")
+        resolved_project_id = str(ps.projectId)
+
+    # Validar que el alumno invitado esté en el mismo proyecto
+    student_in_project = db.query(ProjectStudent).filter(
+        ProjectStudent.userId == body.studentId,
+        ProjectStudent.projectId == resolved_project_id
+    ).first()
+    if not student_in_project:
+        raise HTTPException(status_code=400, detail="El alumno no pertenece a este proyecto.")
+
+    # 1. Obtener o crear equipo del emisor en este proyecto
+    team_id = get_user_team_id(db, current_user.id, project_id=resolved_project_id)
+    if not team_id:
         new_team = Team(
             name=f"Equipo de {current_user.full_name or current_user.username}",
-            projectId=project_student.projectId,
+            projectId=resolved_project_id,
         )
         db.add(new_team)
         db.commit()
         db.refresh(new_team)
-        set_user_team_id(db, current_user.id, new_team.id, is_leader=True)
+        set_user_team_id(db, current_user.id, new_team.id, is_leader=True, project_id=resolved_project_id)
+        team_id = new_team.id
 
-    team = db.query(Team).filter(Team.id == get_user_team_id(db, current_user.id)).first()
+    team = db.query(Team).filter(Team.id == team_id).first()
 
     # 2. Validar que el equipo no esté lleno
     members_count = db.query(User).filter(User.id.in_(db.query(TeamMember.userId).filter(TeamMember.teamId == team.id))).count()
@@ -456,6 +496,7 @@ def cancel_request(
 @router.post("/requests/{requestId}/accept")
 def accept_request(
     requestId: UUID,
+    project_id: Optional[str] = Query(None, description="ID del proyecto de la solicitud"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -492,8 +533,11 @@ def accept_request(
     sender_team = db.query(Team).filter(Team.id == request.team_id).first()
     sender_members_count = db.query(User).filter(User.id.in_(db.query(TeamMember.userId).filter(TeamMember.teamId == sender_team.id))).count()
 
-    # Averiguar estado del equipo receptor (el current_user)
-    receiver_team_id = get_user_team_id(db, current_user.id)
+    # Determinar el proyecto de esta solicitud
+    resolved_project_id = project_id or (str(sender_team.projectId) if sender_team else None)
+
+    # Averiguar estado del equipo receptor (el current_user) en el mismo proyecto
+    receiver_team_id = get_user_team_id(db, current_user.id, project_id=resolved_project_id)
     receiver_members_count = 0
     receiver_team = None
     if receiver_team_id:
@@ -503,29 +547,19 @@ def accept_request(
     # ========================================================
     # LÓGICA BIDIRECCIONAL BASADA EN TAMAÑO DE EQUIPO
     # ========================================================
-    # Si el Receptor ya tiene un equipo (2+ personas) y el Emisor está solo (1 persona):
     if receiver_members_count > 1 and sender_members_count == 1:
-        # El Emisor (Sender) se unirá al equipo del Receptor.
-        # Validar si el equipo del Receptor tiene cupo para el Emisor
+        # El Emisor se unirá al equipo del Receptor
         if receiver_members_count >= (receiver_team.project.team_size if receiver_team.project else 4):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Tu equipo ya se encuentra lleno, por lo que esta persona no puede unirse a tu equipo."
             )
 
-        # El Emisor es el único miembro de su equipo (que es él mismo, el admin_id).
         sender_user = db.query(User).filter(User.id == get_team_admin_id(db, sender_team.id)).first()
-        
-        # El Emisor se une al equipo del Receptor
-        set_user_team_id(db, sender_user.id, receiver_team.id)
-        
-        # El equipo del Emisor queda vacío, lo borramos.
+        set_user_team_id(db, sender_user.id, receiver_team.id, project_id=resolved_project_id)
         db.delete(sender_team)
-        
-        # Actualizamos la solicitud a ACEPTADA
         request.state = "ACEPTADA"
         
-        # El Receptor NO cambia de equipo. Se queda en su propio equipo.
         target_team_name = receiver_team.name
         user_to_notify_id = sender_user.id
         notification_title = "¡Te has unido a un equipo!"
@@ -534,7 +568,6 @@ def accept_request(
     else:
         # LÓGICA ORIGINAL: El Receptor se une al equipo del Emisor.
         if sender_members_count >= (sender_team.project.team_size if sender_team.project else 4):
-            # Cancelar esta solicitud automáticamente
             request.state = "CANCELADA"
             db.commit()
             raise HTTPException(
@@ -542,18 +575,20 @@ def accept_request(
                 detail="La invitación ya no es válida porque el equipo del emisor se encuentra lleno."
             )
             
-        # Si el Receptor tenía un equipo anterior, debe abandonarlo.
+        # Si el Receptor tenía un equipo anterior en este proyecto, debe abandonarlo.
         if receiver_team_id and receiver_team_id != request.team_id:
             old_team = receiver_team
-            if old_team and old_is_team_admin(db, team.id, current_user.id):
-                remaining_member = db.query(User).filter(User.id.in_(db.query(TeamMember.userId).filter(TeamMember.teamId == old_team.id)), User.id != current_user.id).first()
+            if old_team and is_team_admin(db, old_team.id, current_user.id):
+                remaining_member = db.query(User).filter(
+                    User.id.in_(db.query(TeamMember.userId).filter(TeamMember.teamId == old_team.id)),
+                    User.id != current_user.id
+                ).first()
                 if remaining_member:
-                    old_set_user_team_id(db, remaining_member.id, team.id, is_leader=True)
+                    set_user_team_id(db, remaining_member.id, old_team.id, is_leader=True, project_id=resolved_project_id)
                 else:
                     db.delete(old_team)
                     
-        # El Receptor se une al equipo del Emisor
-        set_user_team_id(db, current_user.id, request.team_id)
+        set_user_team_id(db, current_user.id, request.team_id, project_id=resolved_project_id)
         request.state = "ACEPTADA"
         
         target_team_name = sender_team.name
@@ -598,59 +633,66 @@ def accept_request(
 
 @router.get("/suggestions", response_model=List[StudentResponse])
 def get_suggestions(
+    project_id: Optional[str] = Query(None, description="ID del proyecto para filtrar sugerencias"),
     skill: Optional[str] = Query(None, description="Filtro opcional por tag o habilidad"),
     search: Optional[str] = Query(None, description="Filtro opcional por nombre o usuario"),
     show_all: bool = Query(False, description="Si es True, ignora el modelo de clustering y muestra a todos"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    # Resolver project_id: usar el enviado o buscar el primero disponible
+    from models.models import Role, ProjectStudent
+    resolved_project_id = project_id
+    if not resolved_project_id:
+        ps = db.query(ProjectStudent).filter(ProjectStudent.userId == current_user.id).first()
+        if ps:
+            resolved_project_id = str(ps.projectId)
+
     # 1. Obtener los IDs excluidos
     excluded_ids = [current_user.id]
     
-    # Excluir a cualquiera a quien YO (mi equipo) le haya mandado solicitud
-    if get_user_team_id(db, current_user.id):
+    # Excluir a cualquiera a quien YO (mi equipo en este proyecto) le haya mandado solicitud
+    my_team_id = get_user_team_id(db, current_user.id, project_id=resolved_project_id)
+    if my_team_id:
         all_team_invites = db.query(TeamRequest).filter(
-            TeamRequest.team_id == get_user_team_id(db, current_user.id)
+            TeamRequest.team_id == my_team_id
         ).all()
         for invite in all_team_invites:
             if invite.student_id not in excluded_ids:
                 excluded_ids.append(invite.student_id)
             
         # Excluir también a los que YA ESTÁN en mi equipo
-        team_members = db.query(User.id).filter(User.id.in_(db.query(TeamMember.userId).filter(TeamMember.teamId == get_user_team_id(db, current_user.id)))).all()
+        team_members = db.query(User.id).filter(User.id.in_(db.query(TeamMember.userId).filter(TeamMember.teamId == my_team_id))).all()
         for member in team_members:
             if member[0] not in excluded_ids:
                 excluded_ids.append(member[0])
 
-    # Excluir también a los admins de equipos que ME hayan invitado a MÍ
-    # (si alguien ya te mandó invitación, no debe seguir saliendo en tus sugerencias)
-    incoming_requests = db.query(TeamRequest).filter(
+    # Excluir también a los admins de equipos que ME hayan invitado a MÍ en este proyecto
+    incoming_query = db.query(TeamRequest).filter(
         TeamRequest.student_id == current_user.id,
         TeamRequest.state == "PENDIENTE"
-    ).all()
+    )
+    if resolved_project_id:
+        incoming_query = incoming_query.join(Team, TeamRequest.team_id == Team.id).filter(Team.projectId == resolved_project_id)
+    incoming_requests = incoming_query.all()
     for incoming in incoming_requests:
-        # Excluir al admin del equipo que me invitó
         team_that_invited = db.query(Team).filter(Team.id == incoming.team_id).first()
         if team_that_invited and get_team_admin_id(db, team_that_invited.id) not in excluded_ids:
             excluded_ids.append(get_team_admin_id(db, team_that_invited.id))
-        # Excluir también a todos los miembros de ese equipo
         members_of_inviting_team = db.query(User.id).filter(User.id.in_(db.query(TeamMember.userId).filter(TeamMember.teamId == incoming.team_id))).all()
         for m in members_of_inviting_team:
             if m[0] not in excluded_ids:
                 excluded_ids.append(m[0])
 
-    # 2. Filtrar alumnos sin equipo (ALUMNO)
-    from models.models import Role, ProjectStudent
-    
+    # 2. Filtrar alumnos del mismo proyecto
     filters = [
         Role.name == "ALUMNO",
         ~User.id.in_(excluded_ids)
     ]
     
-    current_project_student = db.query(ProjectStudent).filter(ProjectStudent.userId == current_user.id).first()
-    if current_project_student:
+    if resolved_project_id:
         project_filter = User.id.in_(
-            db.query(ProjectStudent.userId).filter(ProjectStudent.projectId == current_project_student.projectId)
+            db.query(ProjectStudent.userId).filter(ProjectStudent.projectId == resolved_project_id)
         )
         filters.append(project_filter)
     
