@@ -36,8 +36,16 @@ router = APIRouter(prefix="/teams", tags=["Teams"])
 
 
 # =========================================================================
-# 2.1. GESTIÓN DE EQUIPO
-# =========================================================================
+
+@router.get("/my-project-id")
+def get_my_project_id(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    project_student = db.query(ProjectStudent).filter(ProjectStudent.userId == current_user.id).first()
+    if not project_student:
+        raise HTTPException(status_code=404, detail="Usuario no asignado a ningún proyecto")
+    return {"projectId": project_student.projectId}
 
 @router.get("/my-team", response_model=TeamResponse)
 def get_my_team(
