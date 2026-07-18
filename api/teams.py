@@ -86,6 +86,7 @@ def get_my_team(
         name=team.name,
         description=team.project.description if team.project and team.project.description else "",
         project=ProjectResponse(
+            id=team.project.id if team.project else None,
             title=team.project.name if team.project else "Sin Proyecto",
             description=team.project.description if (team.project and team.project.description) else ""
         ),
@@ -912,6 +913,7 @@ def get_prof_directory(
                         name=team.name or "Equipo Sin Nombre",
                         description=team.project.description if (team.project and team.project.description) else "",
                         project=ProjectResponse(
+                            id=team.project.id if team.project else None,
                             title=team.project.name if team.project else "Sin Proyecto", 
                             description=team.project.description if (team.project and team.project.description) else ""
                         ),

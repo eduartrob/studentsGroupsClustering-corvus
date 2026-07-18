@@ -22,6 +22,7 @@ class SocialLinkResponse(BaseModel):
 
 # --- Proyecto del Equipo ---
 class ProjectResponse(BaseModel):
+    id: Optional[UUID] = None
     title: str
     description: str
 
