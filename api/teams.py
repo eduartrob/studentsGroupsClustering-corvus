@@ -320,6 +320,11 @@ def get_requests(
         else:
             target_user = r.student
 
+        # Fetches skills exactly like get_suggestions does
+        target_skills = db.query(UserSkill).filter(UserSkill.userId == target_user.id).all()
+        target_skill_ids = {us.skillId for us in target_skills}
+        target_tags = [db.query(Skill).filter(Skill.id == sid).first().name for sid in target_skill_ids if db.query(Skill).filter(Skill.id == sid).first()]
+
         response.append(
             RequestResponse(
                 id=r.id,
@@ -332,7 +337,7 @@ def get_requests(
                     bio=target_user.bio,
                     avatarUrl=target_user.profile_picture,
                     isVerified=target_user.is_verified,
-                    tags=target_user.tags
+                    tags=target_tags
                 )
             )
         )
@@ -547,6 +552,14 @@ def accept_request(
     # ========================================================
     # LÓGICA BIDIRECCIONAL BASADA EN TAMAÑO DE EQUIPO
     # ========================================================
+    if receiver_members_count > 1 and sender_members_count > 1:
+        # Ambos ya tienen un equipo formado. La solicitud quedó obsoleta por carrera de condiciones.
+        db.delete(request)
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Esta invitación ya no es válida porque el equipo emisor ya se integró con otras personas (ambos ya pertenecen a un equipo)."
+        )
     if receiver_members_count > 1 and sender_members_count == 1:
         # El Emisor se unirá al equipo del Receptor
         if receiver_members_count >= (receiver_team.project.team_size if receiver_team.project else 4):
