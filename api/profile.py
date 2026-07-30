@@ -48,3 +48,11 @@ def perfil_completo(
         "materias": [],
         "documentos_con_ia": [],
     }
+
+@router.get('/internal/project/{project_id}/users', tags=['Internal'])
+def get_project_users(project_id: str, db: Session = Depends(get_db)):
+    from models.models import ProjectProfessor, ProjectStudent
+    professors = db.query(ProjectProfessor.user_id).filter(ProjectProfessor.project_id == project_id).all()
+    students = db.query(ProjectStudent.user_id).filter(ProjectStudent.project_id == project_id).all()
+    user_ids = [p[0] for p in professors] + [s[0] for s in students]
+    return {'user_ids': list(set(user_ids))}
