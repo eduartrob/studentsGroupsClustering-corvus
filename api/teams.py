@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, text
 from typing import List, Optional
 from uuid import UUID
 from datetime import datetime
@@ -203,17 +203,21 @@ def leave_team(
         )
 
     old_team_id = get_user_team_id(db, current_user.id)
+    was_admin = is_team_admin(db, old_team_id, current_user.id)
     set_user_team_id(db, current_user.id, None)
     
-    # Check if the user was the admin
+    # Check if the team is now empty
     team = db.query(Team).filter(Team.id == old_team_id).first()
-    if team and is_team_admin(db, team.id, current_user.id):
-        # User is the admin, need to assign new admin or delete team
-        remaining_member = db.query(User).filter(User.id.in_(db.query(TeamMember.userId).filter(TeamMember.teamId == old_team_id))).first()
-        if remaining_member:
-            set_user_team_id(db, remaining_member.id, team.id, is_leader=True)
-        else:
+    if team:
+        remaining_count = db.query(TeamMember).filter(TeamMember.teamId == old_team_id).count()
+        if remaining_count == 0:
+            db.execute(text("DELETE FROM final_reviews WHERE team_id = :tid"), {"tid": old_team_id})
             db.delete(team)
+        elif was_admin:
+            # User was the admin, need to assign new admin
+            remaining_member = db.query(User).filter(User.id.in_(db.query(TeamMember.userId).filter(TeamMember.teamId == old_team_id))).first()
+            if remaining_member:
+                set_user_team_id(db, remaining_member.id, team.id, is_leader=True)
 
     db.commit()
 
