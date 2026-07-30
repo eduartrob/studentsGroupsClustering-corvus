@@ -17,7 +17,6 @@ class User(Base):
     roleId = Column(Integer, ForeignKey("roles.id"), default=1)
     google_refresh_token = Column(TEXT, nullable=True)
     google_access_token = Column(TEXT, nullable=True)
-    team_id = Column(UUID(as_uuid=True), ForeignKey("teams.id", ondelete="SET NULL"), nullable=True)
     
     # Campos adicionales para soportar sugerencias y solicitudes
     bio = Column(TEXT, default="")
@@ -33,7 +32,7 @@ class User(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relaciones
-    team = relationship("Team", back_populates="members", foreign_keys=[team_id])
+    team_members = relationship("TeamMember", back_populates="user", cascade="all, delete-orphan")
     requests = relationship("TeamRequest", back_populates="student", cascade="all, delete-orphan")
     role = relationship("Role")
     university = relationship("University")
@@ -57,23 +56,59 @@ class Role(Base):
     name = Column(String(255), unique=True, nullable=False)
 
 
-class Team(Base):
-    __tablename__ = "teams"
+class Project(Base):
+    __tablename__ = "projects"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(255), nullable=False)
     description = Column(TEXT, nullable=True)
-    project_title = Column(String(255), default="Sistema de gestión de equipos")
-    project_description = Column(TEXT, default="Herramienta colaborativa para conectar estudiantes y optimizar la asignación de proyectos académicos.")
-    max_members = Column(Integer, default=3)
-    admin_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    code = Column(String(255), unique=True, nullable=False)
+    team_size = Column(Integer, default=4)
+    career_id = Column(UUID(as_uuid=True), ForeignKey("careers.id"), nullable=True)
+    creator_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    teams = relationship("Team", back_populates="project", cascade="all, delete-orphan")
+
+class ProjectProfessor(Base):
+    __tablename__ = "project_professors"
+
+    projectId = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True)
+    userId = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+
+class ProjectStudent(Base):
+    __tablename__ = "project_students"
+
+    projectId = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True)
+    userId = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class Team(Base):
+    __tablename__ = "teams"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(255), nullable=True)
+    projectId = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relaciones
-    members = relationship("User", back_populates="team", foreign_keys=[User.team_id])
+    project = relationship("Project", back_populates="teams")
+    members = relationship("TeamMember", back_populates="team", cascade="all, delete-orphan")
     social_links = relationship("TeamSocialLink", back_populates="team", cascade="all, delete-orphan")
     requests = relationship("TeamRequest", back_populates="team", cascade="all, delete-orphan")
+
+class TeamMember(Base):
+    __tablename__ = "team_members"
+
+    teamId = Column(UUID(as_uuid=True), ForeignKey("teams.id", ondelete="CASCADE"), primary_key=True)
+    userId = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    is_leader = Column(Boolean, default=False)
+
+    team = relationship("Team", back_populates="members")
+    user = relationship("User", back_populates="team_members")
+
 
 
 class TeamSocialLink(Base):
@@ -116,42 +151,10 @@ class StudentCourse(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
-class StudentSubmission(Base):
-    __tablename__ = "student_submissions"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    student_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    course_name = Column(String(255), nullable=False)
-    title = Column(String(255), nullable=False)
-    grade = Column(Float, default=0.0)
-    created_at = Column(DateTime, default=datetime.utcnow)
 
 
-class StudentDrivePDF(Base):
-    __tablename__ = "student_drive_pdfs"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    student_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    file_id = Column(String(255), unique=True, nullable=False)
-    name = Column(String(255), nullable=False)
-    folder = Column(String(255), nullable=True)
-    is_ai_generated = Column(Boolean, default=False)
-    ai_probability = Column(Float, default=0.0)
-    detected_technologies = Column(ARRAY(String), default=[])
-    created_at = Column(DateTime, default=datetime.utcnow)
 
 
-class StudentSkill(Base):
-    __tablename__ = "student_skills"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    student_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    skill_name = Column(String(100), nullable=False)
-    level = Column(String(50), nullable=False)
-    percentage = Column(Float, default=0.0)
-    evidence_courses = Column(ARRAY(String), default=[])
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class Skill(Base):
     __tablename__ = "skills"
