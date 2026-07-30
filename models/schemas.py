@@ -22,6 +22,7 @@ class SocialLinkResponse(BaseModel):
 
 # --- Proyecto del Equipo ---
 class ProjectResponse(BaseModel):
+    id: Optional[UUID] = None
     title: str
     description: str
 
@@ -73,6 +74,7 @@ class StudentResponse(BaseModel):
     avatarUrl: Optional[str] = None
     isVerified: bool = False
     tags: List[str] = []
+    hasTeam: bool = False
 
     class Config:
         orm_mode = True

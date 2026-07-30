@@ -16,8 +16,11 @@ async def lifespan(app: FastAPI):
     if rabbitmq_conn:
         await rabbitmq_conn.close()
 
+from api.profile import router as profile_router
+
 app = FastAPI(title="Student Clustering API (Full Stack Teams)", lifespan=lifespan)
 app.include_router(teams_router)
+app.include_router(profile_router)
 
 @app.get("/")
 def root():
